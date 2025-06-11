@@ -1,0 +1,141 @@
+generator client{
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+    url = env("DATABASE_URL")
+}
+
+model Company {
+  id            Int          @id @default(autoincrement())
+  name          String       @unique
+  industry      String
+  address       String
+  stateId       Int
+  cityId        Int
+  createdAt     DateTime     @default(now())
+
+  state         State        @relation(fields: [stateId], references: [id])
+  city          City         @relation(fields: [cityId], references: [id])
+
+  users         User[]
+  employees     Employee[]
+  departments   Department[]
+  designations  Designation[]
+  payMasters    PayMaster[]
+  payParameters PayParameter[]
+}
+
+model User {
+  id            Int       @id @default(autoincrement())
+  name          String
+  email         String    @unique
+  password      String
+  role          String    @default("admin") // "admin" or "employee"
+  mobile        String?
+  refreshToken  String?
+  companyId     Int
+
+  company       Company   @relation(fields: [companyId], references: [id])
+}
+
+model Employee {
+  id           Int       @id @default(autoincrement())
+  name         String
+  email        String    @unique
+  mobileNo     String
+  salary       Int
+  gender       String
+  dob          String
+  address1     String
+  address2     String
+  image        String
+  password     String
+  type         String     // permanent/contract/etc
+
+  designation  String
+  department   String
+  accountNo    String
+  tfAccountNo  String
+  bankCode     String
+
+  cityId       Int
+  stateId      Int
+  companyId    Int
+
+  city         City      @relation(fields: [cityId], references: [id])
+  state        State     @relation(fields: [stateId], references: [id])
+  company      Company   @relation(fields: [companyId], references: [id])
+}
+
+model Department {
+  id         Int      @id @default(autoincrement())
+  name       String
+  companyId  Int
+
+  company    Company  @relation(fields: [companyId], references: [id])
+}
+
+model Designation {
+  id         Int      @id @default(autoincrement())
+  name       String
+  companyId  Int
+
+  company    Company  @relation(fields: [companyId], references: [id])
+}
+
+model BankCode {
+  id    Int     @id @default(autoincrement())
+  code  String  @unique
+  name  String
+}
+
+model PayMaster {
+  id         Int      @id @default(autoincrement())
+  month      String
+  year       String
+  employeeId Int
+  salary     Int
+  da         Int
+  hra        String
+  ept        String
+  esi        String
+  spall      String
+  gross      String
+  netSal     String
+  companyId  Int
+
+  company    Company  @relation(fields: [companyId], references: [id])
+}
+
+model PayParameter {
+  id          Int     @id @default(autoincrement())
+  designation String
+  department  String
+  da          String
+  ta          String
+  hra         String
+  spall       String
+  companyId   Int
+
+  company     Company  @relation(fields: [companyId], references: [id])
+}
+
+model State {
+  id        Int     @id @default(autoincrement())
+  stateName String  @unique
+  cities    City[]
+  companies Company[]
+  employees Employee[]
+}
+
+model City {
+  id        Int     @id @default(autoincrement())
+  cityName  String
+  stateId   Int
+
+  state     State   @relation(fields: [stateId], references: [id])
+  companies Company[]
+  employees Employee[]
+}
