@@ -15,6 +15,8 @@ model Company {
   stateId       Int
   cityId        Int
   createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
 
   state         State        @relation(fields: [stateId], references: [id])
   city          City         @relation(fields: [cityId], references: [id])
@@ -32,94 +34,146 @@ model User {
   name          String
   email         String    @unique
   password      String
-  role          String    @default("admin") // "admin" or "employee"
+  role          String    @default("admin") // Only admins can signup
   mobile        String?
   refreshToken  String?
   companyId     Int
-
-  company       Company   @relation(fields: [companyId], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 model Employee {
-  id           Int       @id @default(autoincrement())
-  name         String
-  email        String    @unique
-  mobileNo     String
-  salary       Int
-  gender       String
-  dob          String
-  address1     String
-  address2     String
-  image        String
-  password     String
-  type         String     // permanent/contract/etc
-
-  designation  String
-  department   String
-  accountNo    String
-  tfAccountNo  String
-  bankCode     String
-
-  cityId       Int
-  stateId      Int
-  companyId    Int
-
-  city         City      @relation(fields: [cityId], references: [id])
-  state        State     @relation(fields: [stateId], references: [id])
-  company      Company   @relation(fields: [companyId], references: [id])
+   id            Int             @id @default(autoincrement())
+  employeeCode  String          @unique // Add employee code for better identification
+  name          String
+  email         String          @unique
+  mobileNo      String
+  salary        Decimal         @db.Decimal(10, 2)
+  gender        Gender
+  dob           DateTime
+  address1      String
+  address2      String?
+  image         String?
+  password      String
+  type          EmployeeType
+  accountNo     String?
+  tfAccountNo   String?
+  bankCodeId    Int?
+  cityId        Int
+  stateId       Int
+  companyId     Int
+  designationId Int
+  departmentId  Int
+  refreshToken  String?
+  isActive      Boolean         @default(true)
+  joinedAt      DateTime        @default(now())
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  
+  city          City            @relation(fields: [cityId], references: [id])
+  state         State           @relation(fields: [stateId], references: [id])
+  company       Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  designation   Designation     @relation(fields: [designationId], references: [id])
+  department    Department      @relation(fields: [departmentId], references: [id])
+  bankCode      BankCode?       @relation(fields: [bankCodeId], references: [id])
+  
+  payMasters    PayMaster[]
+  
+  @@map("employees")
 }
 
 model Department {
-  id         Int      @id @default(autoincrement())
+  id         Int        @id @default(autoincrement())
   name       String
+  code       String?    
   companyId  Int
-
-  company    Company  @relation(fields: [companyId], references: [id])
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  
+  company    Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employees  Employee[]
+  payParameters PayParameter[]
+  
+  @@unique([name, companyId]) 
+  @@map("departments")
 }
 
 model Designation {
-  id         Int      @id @default(autoincrement())
+  id         Int        @id @default(autoincrement())
   name       String
+  code       String?    // Designation code
   companyId  Int
-
-  company    Company  @relation(fields: [companyId], references: [id])
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  
+  company    Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employees  Employee[]
+  payParameters PayParameter[]
+  
+  @@unique([name, companyId]) 
+  @@map("designations")
 }
 
 model BankCode {
-  id    Int     @id @default(autoincrement())
-  code  String  @unique
-  name  String
+  id        Int        @id @default(autoincrement())
+  code      String     @unique
+  name      String
+  createdAt DateTime   @default(now())
+  
+  employees Employee[]
+  
+  @@map("bank_codes")
 }
 
 model PayMaster {
   id         Int      @id @default(autoincrement())
-  month      String
-  year       String
+  month      Int      // 1-12 for better validation
+  year       Int
   employeeId Int
-  salary     Int
-  da         Int
-  hra        String
-  ept        String
-  esi        String
-  spall      String
-  gross      String
-  netSal     String
+  basicSalary Decimal @db.Decimal(10, 2)
+  da         Decimal  @db.Decimal(10, 2) // Dearness Allowance
+  hra        Decimal  @db.Decimal(10, 2) // House Rent Allowance
+  ta         Decimal  @db.Decimal(10, 2) // Travel Allowance
+  ept        Decimal  @db.Decimal(10, 2) // Employee Provident Fund
+  esi        Decimal  @db.Decimal(10, 2) // Employee State Insurance
+  spall      Decimal  @db.Decimal(10, 2) // Special Allowance
+  otherDeductions Decimal @db.Decimal(10, 2) @default(0)
+  gross      Decimal  @db.Decimal(10, 2)
+  netSalary  Decimal  @db.Decimal(10, 2)
   companyId  Int
-
-  company    Company  @relation(fields: [companyId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  
+  @@unique([employeeId, month, year]) // Prevent duplicate pay records
+  @@map("pay_masters")
 }
 
 model PayParameter {
-  id          Int     @id @default(autoincrement())
-  designation String
-  department  String
-  da          String
-  ta          String
-  hra         String
-  spall       String
-  companyId   Int
-
-  company     Company  @relation(fields: [companyId], references: [id])
+   id            Int         @id @default(autoincrement())
+  designationId Int
+  departmentId  Int
+  da            Decimal     @db.Decimal(5, 2) // Percentage
+  ta            Decimal     @db.Decimal(5, 2) // Percentage
+  hra           Decimal     @db.Decimal(5, 2) // Percentage
+  spall         Decimal     @db.Decimal(5, 2) // Percentage
+  eptRate       Decimal     @db.Decimal(5, 2) @default(12.00) // EPF rate
+  esiRate       Decimal     @db.Decimal(5, 2) @default(0.75)  // ESI rate
+  companyId     Int
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  company       Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  designation   Designation @relation(fields: [designationId], references: [id])
+  department    Department  @relation(fields: [departmentId], references: [id])
+  
+  @@unique([designationId, departmentId, companyId])
+  @@map("pay_parameters")
 }
 
 model State {
@@ -138,4 +192,17 @@ model City {
   state     State   @relation(fields: [stateId], references: [id])
   companies Company[]
   employees Employee[]
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum EmployeeType {
+  PERMANENT
+  CONTRACT
+  TEMPORARY
+  INTERN
 }
