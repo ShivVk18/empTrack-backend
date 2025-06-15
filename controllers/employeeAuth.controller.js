@@ -4,6 +4,30 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
+import { generateAccessToken, generateRefreshToken } from "../utils/jwt.js";
+import jwt from 'jsonwebtoken'
+
+const generateEmployeeAccessAndRefreshToken =  async(employeeId) =>{
+     try {
+         
+        const employee = await prisma.employee.findUnique({
+             where:{id:employeeId}
+        })
+
+        if(!employee){
+            throw new ApiError(404,"User not found")
+        }
+
+        const accessToken = generateAccessToken(employee)
+        const refreshToken = generateRefreshToken(employee)
+         
+        return {accessToken,refreshToken}
+        
+     } catch (error) {
+         throw new ApiError(500, "Something went wrong while generating referesh and access token")
+     }
+}
+
 
 const addEmployee = asyncHandler(async (req, res) => {
   const {
@@ -198,10 +222,156 @@ const addEmployee = asyncHandler(async (req, res) => {
   }
 });
 
-const employeeLogin = asyncHandler(async (req, res) => {});
+const employeeLogin = asyncHandler(async (req, res) => {  
+  const {email,mobile,password} = req.body 
+     
+    
+  if (!password) {
+    throw new ApiError(400, "Password is required");
+  }
 
-const employeeLogout = asyncHandler(async (req, res) => {});
+  if (!email && !mobile) {
+    throw new ApiError(400, "Email or mobile number is required");
+  }
+   
+  const employee = await prisma.employee.findFirst({
+     where: {
+      OR: [{ email: email }, { mobile: mobile }],
+    },
+  }) 
 
-const employeeUpdateProfile = asyncHandler(async (req, res) => {});
+  if(!employee){
+     throw new ApiError(404, "Employee not found");
+  }
+    
+   if(employee.isActive === false){
+      throw  new ApiError(401,"Employee status is inactive")
+   }
 
-const employeeUpdateProfilePic = asyncHandler(async (req, res) => {});
+  const isPasswordValid = await bcrypt.compare(password,employee.password)
+
+  if(!isPasswordValid){
+     throw new ApiError(401, "Invalid user credentials");
+  }  
+
+  const {accessToken,refreshToken} = await generateEmployeeAccessAndRefreshToken(employee.id) 
+
+  await prisma.employee.update({
+     where:{
+       id:employee.id
+     },data:{refreshToken:refreshToken}
+  })
+  
+  const loggedInEmployee = await prisma.employee.findUnique({
+    where:{
+      id:employee.id
+    }, select:{
+       employeeCode:true,
+       isActive:true,
+       name:true,
+       email:true,
+       mobileNo:true,
+       companyId:true,
+       type:true
+    }
+  })
+
+  if(!loggedInEmployee){
+     throw new ApiError(400,"Problem in logging in")
+  }  
+  
+
+  const options = {
+    httpOnly:true,
+    secure:true
+  }
+  return res.status(200).cookies("refreshToken",refreshToken,options).cookie("accessToken",accessToken,options).json(
+    new ApiResponse(200,{
+       employee:loggedInEmployee,
+        accessToken,
+        refreshToken
+    },"Employee logged in successfully")
+  )
+
+ 
+});
+
+const employeeLogout = asyncHandler(async (req, res) => {  
+     await prisma.employee.update({
+      where:{id:req.employee.id}, data:{
+         refreshToken:null
+      }
+     })
+
+     const options = {
+       httpOnly:true,
+       secure:true
+     }
+
+     return res.status(200).clearCookie("refreshToken",options).clearCookie("accessToken",options).json(new ApiResponse(200,{},"Employee logged out successfully"))
+
+});
+
+const refreshEmployeeAccessToken = asyncHandler(async(req,res)=>{
+      const incomingEmployeeRefreshToken = req.cookies.refreshToken || req.body.refreshToken
+      
+      if(!incomingEmployeeRefreshToken){
+         throw new ApiError(401, "unauthorized request")
+      }
+
+      try {
+         const decodedEmployeeToken =  jwt.verify(incomingEmployeeRefreshToken,process.env.REFRESH_TOKEN_SECRET) 
+
+         if(!decodedEmployeeToken) {
+          throw new ApiError(401, "unauthorized request")
+         }
+
+         const employee = await prisma.employee.findUnique({
+          where:{
+             id:decodedEmployeeToken._id
+          }
+         })
+
+         if(!employee) {
+          throw new ApiError(401, "Invalid refresh token")
+         }
+           
+         if (!employee.isActive) {
+  throw new ApiError(403, "Employee account is inactive");
+}         
+
+
+         if(incomingEmployeeRefreshToken !== employee?.refreshToken){
+             throw new ApiError(401, "Refresh token is expired or used")
+         } 
+
+          const options = {
+           httpOnly:true,
+           secure:true
+        }
+         
+
+        const {accessToken,newEmployeeRefreshToken} = await generateEmployeeAccessAndRefreshToken(employee.id)
+        
+        await prisma.employee.update({
+          where:{id:employee.id} ,data:{
+             refreshToken:newEmployeeRefreshToken
+          }
+        })
+
+        return res.status(200).cookie("accessToken",accessToken,options).cookie("refreshToken",newEmployeeRefreshToken,options).json(
+          new ApiResponse(200,{
+             accessToken,refreshToken:newEmployeeRefreshToken
+          },"Employee Access Token refreshed")
+        )
+
+      }catch (error) {
+         throw new ApiError(401, error?.message || "Invalid refresh token")
+      }
+        
+
+
+})
+
+
+export {addEmployee,employeeLogin,employeeLogout,refreshEmployeeAccessToken}

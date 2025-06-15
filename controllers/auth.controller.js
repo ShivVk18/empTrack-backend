@@ -156,6 +156,8 @@ const adminLogin = asyncHandler(async (req, res) => {
   const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
     user.id
   );
+  
+  await prisma.user.update({where:{id:user.id} ,data:{refreshToken:refreshToken}})
 
   const loggedInUser = await prisma.user.findUnique({
     where: {
@@ -189,6 +191,65 @@ const adminLogin = asyncHandler(async (req, res) => {
     );
 });
 
+const adminLogOut = asyncHandler(async(req,res)=>{
+     await prisma.user.update({
+       where:{
+         id:req.user.id
+       },
+       data:{
+         refreshToken:null
+       }
+     }); 
+
+         const options = {
+        httpOnly: true,
+        secure: true
+    }   
+     return res.status(200).clearCookie("accessToken",options).clearCookie("refreshToken",options).json(new ApiResponse(200,{},"Admin logged out successfully"))
+})  
+
+const refreshAdminAccessToken = asyncHandler(async(req,res)=>{
+   const incomingAdminRefreshToken = req.cookies.refreshToken || req.body.refreshToken 
+
+   if(!incomingAdminRefreshToken) {
+     throw new ApiError(401, "unauthorized request")
+   }  
+
+    try {
+       const decodedToken = jwt.verify(incomingAdminRefreshToken,process.env.REFRESH_TOKEN_SECRET) 
+
+       const user = await prisma.user.findUnique({where:{id:decodedToken._id}}) 
+
+       if(!user){
+         throw new ApiError(401, "Invalid refresh token")
+       }  
+
+       if(incomingAdminRefreshToken !== user?.refreshToken){
+             throw new ApiError(401, "Refresh token is expired or used")
+       }  
+
+        const options = {
+           httpOnly:true,
+           secure:true
+        }
+
+        const {accessToken,newRefreshToken} = await generateAccessAndRefreshToken(user.id)  
+         
+        await prisma.user.update({ 
+          where:{id:user.id},data:{refreshToken:newRefreshToken}
+        })
+        return res.status(200).cookie("accessToken",accessToken,options).cookie("refreshToken",newRefreshToken,options).json(
+          new ApiResponse(200,{
+             accessToken,refreshToken:newRefreshToken
+          },"Access Token refreshed")
+        )
+
+    } catch (error) {
+      throw new ApiError(401, error?.message || "Invalid refresh token")
+    }
+})   
 
 
-export {adminSignUp,adminLogin}
+
+
+export {adminSignUp,adminLogin,adminLogOut,refreshAdminAccessToken}
