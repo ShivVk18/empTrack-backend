@@ -45,8 +45,8 @@ model User {
 }
 
 model Employee {
-   id            Int             @id @default(autoincrement())
-  employeeCode  String          @unique // Add employee code for better identification
+  id            Int             @id @default(autoincrement())
+  employeeCode  String          @unique 
   name          String
   email         String          @unique
   mobileNo      String
@@ -55,11 +55,11 @@ model Employee {
   dob           DateTime
   address1      String
   address2      String?
-  image         String?
+  profilePic    String?
   password      String
   type          EmployeeType
   accountNo     String?
-  tfAccountNo   String?
+  pfAccountNo   String?
   bankCodeId    Int?
   cityId        Int
   stateId       Int
