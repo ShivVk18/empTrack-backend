@@ -51,7 +51,7 @@ const addEmployee = asyncHandler(async (req, res) => {
     departmentName,
   } = req.body;
 
-  //fetch company id from admin token
+  
   const companyId = req.user?.companyId;
 
   //field validation
