@@ -3,7 +3,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import prisma from "../config/prismaClient.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
-
+import bcrypt from "bcrypt";
 const getAllEmployees = asyncHandler(async (req, res) => {
   const companyId = req.user?.companyId;
 
@@ -273,7 +273,6 @@ const findEmployeeUsingEmployeeCode = asyncHandler(async (req, res) => {
   }
 });
 
-
 const findEmployeeUsingEmployeeName = asyncHandler(async (req, res) => {
   const employeeName = req.query.employeeName?.trim();
 
@@ -322,8 +321,7 @@ const findEmployeeUsingEmployeeName = asyncHandler(async (req, res) => {
   }
 });
 
-
-const advEmpFilter = asyncHandler(async(req,res)=>{ 
+const advEmpFilter = asyncHandler(async (req, res) => {
   const { departmentName, designationName, status, type } = req.query;
   const companyId = req.user?.companyId;
 
@@ -372,18 +370,21 @@ const advEmpFilter = asyncHandler(async(req,res)=>{
   }
 
   if (filterConditions.length === 0) {
-    throw new ApiError(400, "At least one filter (department, designation, status, type) is required");
+    throw new ApiError(
+      400,
+      "At least one filter (department, designation, status, type) is required"
+    );
   }
 
   try {
     const employees = await prisma.employee.findMany({
       where: {
         companyId,
-        OR: filterConditions, 
+        OR: filterConditions,
       },
       select: {
         id: true,
-        employeeCode:true,
+        employeeCode: true,
         email: true,
         name: true,
         companyId: true,
@@ -400,27 +401,32 @@ const advEmpFilter = asyncHandler(async(req,res)=>{
       throw new ApiError(404, "No employees found matching the filters");
     }
 
-    return res.status(200).json(
-      new ApiResponse(200, employees, "Employees fetched successfully with filters")
-    );
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          employees,
+          "Employees fetched successfully with filters"
+        )
+      );
   } catch (error) {
     throw new ApiError(500, "Failed to filter employees");
   }
-});  
+});
 
+const viewProfile = asyncHandler(async (req, res) => {
+  const companyId = req.employee?.companyId;
+  const employeeId = req.employee?.id;
 
-const viewProfile = asyncHandler(async(req,res)=>{
-  const companyId = req.employee?.companyId
-  const employeeId = req.employee?.id
-  
   const employeeProfile = await prisma.employee.findFirst({
-    where:{
-      id:employeeId,
-      companyId:companyId
+    where: {
+      id: employeeId,
+      companyId: companyId,
     },
-    select:{
+    select: {
       id: true,
-      employeeCode:true,
+      employeeCode: true,
       email: true,
       name: true,
       companyId: true,
@@ -430,17 +436,87 @@ const viewProfile = asyncHandler(async(req,res)=>{
       departmentId: true,
       designationId: true,
       mobileNo: true,
-    }
-  })
+    },
+  });
 
-  
   if (!employeeProfile) {
     throw new ApiError(404, "Employee profile not found");
   }
 
-  return res.status(200).json(
-    new ApiResponse(200, employeeProfile, "Employee profile fetched successfully")
-  );
-})
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        employeeProfile,
+        "Employee profile fetched successfully"
+      )
+    );
+});
 
-export {getAllEmployees,deleteEmployee,updateEmployeeDetails,updateEmployeeProfilePic,findEmployeeUsingEmployeeCode,findEmployeeUsingEmployeeName,advEmpFilter,viewProfile}
+const changeEmployeePassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  const employeeId = req.employee?.id;
+
+  if (!currentPassword || !newPassword) {
+    throw new ApiError(400, "Current and new passwords are required");
+  }
+
+  if (newPassword.length < 6) {
+    throw new ApiError(400, "New password must be at least 6 characters long");
+  }
+
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+  });
+
+  if (!employee) {
+    throw new ApiError(404, "Employee not found");
+  }
+
+  const isPasswordMatch = await bcrypt.compare(
+    currentPassword,
+    employee.password
+  );
+
+  if (!isPasswordMatch) {
+    throw new ApiError(401, "Current password is incorrect");
+  }
+
+  if (await bcrypt.compare(newPassword, employee.password)) {
+    throw new ApiError(
+      400,
+      "New password must be different from the current password"
+    );
+  }
+
+  const hashedNewPassword = await bcrypt.hash(newPassword, 12);
+
+  try {
+    await prisma.employee.update({
+      where: { id: employeeId },
+      data: { password: hashedNewPassword },
+    });
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, {}, "Password updated successfully"));
+  } catch (error) {
+    console.error("Error updating password:", error);
+    throw new ApiError(500, "Failed to update password");
+  }
+});
+
+
+export {
+  getAllEmployees,
+  deleteEmployee,
+  updateEmployeeDetails,
+  updateEmployeeProfilePic,
+  findEmployeeUsingEmployeeCode,
+  findEmployeeUsingEmployeeName,
+  advEmpFilter,
+  viewProfile,
+  changeEmployeePassword
+};

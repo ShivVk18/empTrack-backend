@@ -36,7 +36,15 @@ const  adminSignUp = asyncHandler(async(req,res)=>{
           throw new ApiError(400, "All fields are required")
     } 
 
-     const [existingUser, state] = await Promise.all([
+
+    const checkCompanyName = await prisma.company.findUnique({where:{name:companyName}})
+
+    if(checkCompanyName) {
+        throw new ApiError(400, "Company name already exists choose another name");
+    }
+
+    
+    const [existingUser, state] = await Promise.all([
     prisma.user.findUnique({ where: { email } }),
     prisma.state.findFirst({
       where: { stateName },
@@ -69,7 +77,7 @@ const  adminSignUp = asyncHandler(async(req,res)=>{
   let result;
   try {
     result = await prisma.$transaction(async (tx) => {
-      // Create company
+    
       const company = await tx.company.create({
         data: {
           name: companyName,
