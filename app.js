@@ -24,10 +24,10 @@ import stateRoute from './routes/stateCity.routes.js'
 import designationRoute from './routes/designation.routes.js'
 
 
-app.use('api/v1/admin',adminRoute)
-app.use('api/v1/admin',departmentRoute)
-app.use('api/v1/admin',designationRoute)
-app.use('api/v1/employee',employeeRoute)
-app.use('api/v1/states',stateRoute) 
+app.use('/api/v1/admin',adminRoute)
+app.use('/api/v1/admin',departmentRoute)
+app.use('/api/v1/admin',designationRoute)
+app.use('/api/v1/employee',employeeRoute)
+app.use('/api/v1/states',stateRoute) 
 
 export {app}

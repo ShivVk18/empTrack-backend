@@ -8,9 +8,9 @@ export const getCities = async(req,res) =>{
              select:{id:true,cityName:true}
          })
 
-         res.json(cities)
+        return res.json(cities)
       } catch (error) {
-         res.status(500).json({error:"Failed to fetch cities"})
+        return res.status(500).json({error:"Failed to fetch cities"})
       }
 }
 

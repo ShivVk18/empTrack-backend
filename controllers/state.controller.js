@@ -6,9 +6,10 @@ export const getStates = async(req,res) => {
              select: {id:true,stateName:true}
         })
         
-        res.json(states)
+       return res.json(states)
       } catch (error) {
-         res.status(500).json({
+         console.log("Error fetching states:", error);
+         return res.status(500).json({
              error:"Failed to fetch states"
          })
       }
