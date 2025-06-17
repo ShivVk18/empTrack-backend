@@ -383,6 +383,7 @@ const advEmpFilter = asyncHandler(async(req,res)=>{
       },
       select: {
         id: true,
+        employeeCode:true,
         email: true,
         name: true,
         companyId: true,
@@ -408,4 +409,38 @@ const advEmpFilter = asyncHandler(async(req,res)=>{
 });  
 
 
-export {getAllEmployees,deleteEmployee,updateEmployeeDetails,updateEmployeeProfilePic,findEmployeeUsingEmployeeCode,findEmployeeUsingEmployeeName,advEmpFilter}
+const viewProfile = asyncHandler(async(req,res)=>{
+  const companyId = req.employee?.companyId
+  const employeeId = req.employee?.id
+  
+  const employeeProfile = await prisma.employee.findFirst({
+    where:{
+      id:employeeId,
+      companyId:companyId
+    },
+    select:{
+      id: true,
+      employeeCode:true,
+      email: true,
+      name: true,
+      companyId: true,
+      salary: true,
+      gender: true,
+      type: true,
+      departmentId: true,
+      designationId: true,
+      mobileNo: true,
+    }
+  })
+
+  
+  if (!employeeProfile) {
+    throw new ApiError(404, "Employee profile not found");
+  }
+
+  return res.status(200).json(
+    new ApiResponse(200, employeeProfile, "Employee profile fetched successfully")
+  );
+})
+
+export {getAllEmployees,deleteEmployee,updateEmployeeDetails,updateEmployeeProfilePic,findEmployeeUsingEmployeeCode,findEmployeeUsingEmployeeName,advEmpFilter,viewProfile}
