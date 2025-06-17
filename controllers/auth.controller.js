@@ -1,10 +1,10 @@
-import prisma from "../config/prismaClient";
+import prisma from "../config/prismaClient.js";
 import {asyncHandler} from '../utils/asyncHandler.js'
 import {ApiError} from  '../utils/ApiError.js'
 import {ApiResponse} from '../utils/ApiResponse.js'
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
-import { generateAcessToken, generateRefreshToken } from "../utils/jwt.js";
+import { generateAccessToken, generateRefreshToken } from "../utils/jwt.js";
 
 
 const generateAccessAndRefreshToken =  async(userId) =>{
@@ -18,7 +18,7 @@ const generateAccessAndRefreshToken =  async(userId) =>{
             throw new ApiError(404,"User not found")
         }
 
-        const accessToken = generateAcessToken(user)
+        const accessToken = generateAccessToken(user)
         const refreshToken = generateRefreshToken(user)
 
         return {accessToken,refreshToken}
