@@ -44,7 +44,7 @@ const addDepartment = asyncHandler(async (req, res) => {
 });
 
 const getAllDepartments = asyncHandler(async (req, res) => {
-  const companyId = req.user?.companyId;
+  const companyId = req.user?.companyId ;
 
   try {
     const allDepartments = await prisma.department.findMany({

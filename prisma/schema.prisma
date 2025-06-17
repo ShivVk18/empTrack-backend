@@ -149,7 +149,7 @@ model PayMaster {
   company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   
-  @@unique([employeeId, month, year]) // Prevent duplicate pay records
+  @@unique([employeeId, month, year]) 
   @@map("pay_masters")
 }
 

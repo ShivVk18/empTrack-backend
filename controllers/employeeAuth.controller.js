@@ -54,7 +54,7 @@ const addEmployee = asyncHandler(async (req, res) => {
   
   const companyId = req.user?.companyId;
 
-  //field validation
+ 
   if (
     [
       employeeCode,
@@ -136,7 +136,7 @@ const addEmployee = asyncHandler(async (req, res) => {
     }),
   ]);
 
-  // Validate department, designation, and bank code
+ 
   if (!department) {
     throw new ApiError(400, "Invalid department name");
   }
@@ -149,13 +149,13 @@ const addEmployee = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Invalid bank code");
   }
 
-  //profile pic uri upload on cloudinary
+  
   const profilePicUri = await uploadOnCloudinary(profilePicPath);
   if (!profilePicUri?.url) {
     throw new ApiError(400, "Failed to upload profile picture");
   }
 
-  // Hash password
+  
   const hashedPassword = await bcrypt.hash(password, 12);
 
   try {
@@ -368,8 +368,8 @@ const refreshEmployeeAccessToken = asyncHandler(async(req,res)=>{
       }catch (error) {
          throw new ApiError(401, error?.message || "Invalid refresh token")
       }
+         
         
-
 
 })
 
