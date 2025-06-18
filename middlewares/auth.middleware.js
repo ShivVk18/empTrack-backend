@@ -24,6 +24,7 @@ export const verifyAdminJwt = asyncHandler(async (req, _, next) => {
         role: true,
         companyId: true,
       },
+      
     });
 
     if (!user) {
@@ -62,6 +63,8 @@ export const verifyEmployeeJwt = asyncHandler(async (req, _, next) => {
         cityId: true,
         stateId: true,
         profilePic: true,
+        departmentId:true,
+        designationId:true
       },
     });
 
