@@ -148,4 +148,5 @@ const deletePayparameter = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, {}, "Pay parameter deleted successfully"));
 });
 
+
 export { createPayParameter, getPayParameters, deletePayparameter };
