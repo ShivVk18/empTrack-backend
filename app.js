@@ -22,12 +22,17 @@ import employeeRoute from './routes/employee.routes.js'
 import departmentRoute from './routes/department.routes.js'
 import stateRoute from './routes/stateCity.routes.js'
 import designationRoute from './routes/designation.routes.js'
-
+import payMasterRoute from './routes/paymaster.routes.js'
+import payParameterRoute from './routes/payparameter.routes.js'
+import salaryRoute from './routes/salary.routes.js'
 
 app.use('/api/v1/admin',adminRoute)
 app.use('/api/v1/admin',departmentRoute)
 app.use('/api/v1/admin',designationRoute)
 app.use('/api/v1/employee',employeeRoute)
 app.use('/api/v1/states',stateRoute) 
+app.use('/api/v1/admin',payParameterRoute)
+app.use('/api/v1/admin',payMasterRoute)
+app.use('/api/v1/employee',salaryRoute)
 
 export {app}
