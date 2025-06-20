@@ -1,7 +1,7 @@
-import prisma from "../config/prismaClient.js";
-import { asyncHandler } from "../utils/asyncHandler.js";
-import { ApiError } from "../utils/ApiError.js";
-import { ApiResponse } from "../utils/ApiResponse.js";
+import prisma from "../../config/prismaClient.js";
+import { asyncHandler } from "../../utils/asyncHandler.js";
+import { ApiError } from "../../utils/ApiError.js";
+import { ApiResponse } from "../../utils/ApiResponse.js";
 
 const addDepartment = asyncHandler(async (req, res) => {
   const { departmentName, departmentCode } = req.body;
