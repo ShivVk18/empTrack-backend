@@ -1,85 +1,90 @@
-import prisma from "../../config/prismaClient.js";
-import { asyncHandler } from "../../utils/asyncHandler.js";
-import { ApiError } from "../../utils/ApiError.js";
-import { ApiResponse } from "../../utils/ApiResponse.js";
+import prisma from "../../config/prismaClient.js"
+import { asyncHandler } from "../../utils/asyncHandler.js"
+import { ApiError } from "../../utils/ApiError.js"
+import { ApiResponse } from "../../utils/ApiResponse.js"
+import { hasPermission } from "../../middlewares/auth.middleware.js"
 
 const addDesignation = asyncHandler(async (req, res) => {
-  const { designationName,designationCode, description, level } = req.body;
+  const { designationName, designationCode, description, level } = req.body
+  const companyId = req.user?.companyId
+  const currentUser = req.user
+  const userType = req.userType
 
   if (!designationName || !designationCode) {
-    throw new ApiError(400, "All fields are required");
+    throw new ApiError(400, "Designation name and code are required")
   }
 
-  const companyId = req.user?.companyId;
+  // Permission check - only those with designation:manage can create
+  if (!hasPermission(currentUser.role, userType, "designation:manage")) {
+    throw new ApiError(403, "Insufficient permissions to create designations")
+  }
 
   const existingDesignation = await prisma.designation.findFirst({
     where: {
       companyId: companyId,
-      name: designationName,
-      code: designationCode,
+      OR: [{ name: designationName }, { code: designationCode }],
     },
-  });
+  })
 
-  if (existingDesignation) { 
-    throw new ApiError(400, "The name of this designation already exist");
+  if (existingDesignation) {
+    throw new ApiError(400, "Designation with this name or code already exists")
   }
 
   const designation = await prisma.designation.create({
-      data: {
-        name: designationName,
-        code: designationCode,
-        description:description,
-        level: level || null,
-        companyId: companyId,
-      },
-    });
+    data: {
+      name: designationName,
+      code: designationCode,
+      description: description,
+      level: level || null,
+      companyId: companyId,
+    },
+  })
 
-    return res
-      .status(201)
-      .json(
-        new ApiResponse(201, designation , "Designation added successfully")
-      );
-});
+  return res.status(201).json(new ApiResponse(201, designation, "Designation added successfully"))
+})
 
 const getAllDesignations = asyncHandler(async (req, res) => {
-  const companyId = req.user?.companyId;
-
+  const companyId = req.user?.companyId
   const { includeStats = false, page, limit, sortBy = "name", sortOrder = "asc" } = req.query
+  const currentUser = req.user
+  const userType = req.userType
 
-  const queryOptions = {
-    where : {companyId},
-    orderBy:{[sortBy]:sortOrder}
+  // Permission check - only those with designation:read can view
+  if (!hasPermission(currentUser.role, userType, "designation:read")) {
+    throw new ApiError(403, "Insufficient permissions to view designations")
   }
 
+  const queryOptions = {
+    where: { companyId },
+    orderBy: { [sortBy]: sortOrder },
+  }
 
-  if(page && limit){
-     const skip = (Number.parseInt(page) - 1) * Number.parseInt(limit)
+  if (page && limit) {
+    const skip = (Number.parseInt(page) - 1) * Number.parseInt(limit)
     const take = Number.parseInt(limit)
     queryOptions.skip = skip
     queryOptions.take = take
   }
 
-
-  if(includeStats === "true"){
-     queryOptions.include = {
-       _count:{
-        select:{
-          employees:true,
-          payParameters:true,
-        }
-       }
-     }
+  if (includeStats === "true") {
+    queryOptions.include = {
+      _count: {
+        select: {
+          employees: true,
+          payParameters: true,
+        },
+      },
+    }
   }
 
-  const [designations ,totalCount] =  await Promise.all([
+  const [designations, totalCount] = await Promise.all([
     prisma.designation.findMany(queryOptions),
     page && limit ? prisma.designation.count({ where: { companyId } }) : null,
   ])
-    
 
-  const response = {designations}
+  const response = { designations }
 
-   if (page && limit) {
+  if (page && limit) {
     response.pagination = {
       currentPage: Number.parseInt(page),
       totalPages: Math.ceil(totalCount / Number.parseInt(limit)),
@@ -90,19 +95,24 @@ const getAllDesignations = asyncHandler(async (req, res) => {
   }
 
   return res.status(200).json(new ApiResponse(200, response, "Designations fetched successfully"))
-});
+})
 
-const getDesignationById = asyncHandler(async(req,res)=> {
-   const designationId =  Number.parseInt(req.params?.id)
-   const companyId = req.user?.companyId
+const getDesignationById = asyncHandler(async (req, res) => {
+  const designationId = Number.parseInt(req.params?.id)
+  const companyId = req.user?.companyId
+  const currentUser = req.user
+  const userType = req.userType
 
-   if(!designationId){
-     throw new ApiError(400, "Designation ID is required")
-  
-   }
+  if (!designationId) {
+    throw new ApiError(400, "Designation ID is required")
+  }
 
+  // Permission check - only those with designation:read can view
+  if (!hasPermission(currentUser.role, userType, "designation:read")) {
+    throw new ApiError(403, "Insufficient permissions to view designation details")
+  }
 
-    const designation = await prisma.designation.findFirst({
+  const designation = await prisma.designation.findFirst({
     where: {
       id: designationId,
       companyId,
@@ -136,49 +146,12 @@ const getDesignationById = asyncHandler(async(req,res)=> {
   return res.status(200).json(new ApiResponse(200, designation, "Designation details fetched successfully"))
 })
 
-const deleteDesignation = asyncHandler(async(req,res)=> {
-  const designationId =  Number.parseInt(req.params?.id)
+const updateDesignation = asyncHandler(async (req, res) => {
   const companyId = req.user?.companyId
-
-   if (!designationId) {
-    throw new ApiError(400, "Designation ID is required")
-  }
-
-  const designation = await prisma.designation.findFirst({
-    where: {
-      id: designationId,
-      companyId,
-    },
-    include: {
-      employees: true,
-      payParameters: true,
-    },
-  })
-
-  if (!designation) {
-    throw new ApiError(404, "Designation not found")
-  }
-  
-
-  if (designation.employees.length > 0) {
-    throw new ApiError(400, "Cannot delete designation with existing employees")
-  }
-
-  if (designation.payParameters.length > 0) {
-    throw new ApiError(400, "Cannot delete designation with existing pay parameters")
-  }
-
-  await prisma.designation.delete({
-    where: { id: designationId },
-  })
-
-  return res.status(200).json(new ApiResponse(200, {}, "Designation deleted successfully"))
-})
-
-const updateDesignation = asyncHandler(async(req,res)=> {
-   const companyId = req.user?.companyId
   const designationId = Number.parseInt(req.params?.id)
   const { designationName, designationCode, description, level } = req.body
+  const currentUser = req.user
+  const userType = req.userType
 
   if (!designationId) {
     throw new ApiError(400, "Designation ID is required")
@@ -188,7 +161,11 @@ const updateDesignation = asyncHandler(async(req,res)=> {
     throw new ApiError(400, "Designation name is required")
   }
 
-  // Check if designation exists
+  // Permission check - only those with designation:manage can update
+  if (!hasPermission(currentUser.role, userType, "designation:manage")) {
+    throw new ApiError(403, "Insufficient permissions to update designations")
+  }
+
   const existingDesignation = await prisma.designation.findFirst({
     where: { id: designationId, companyId },
   })
@@ -197,7 +174,6 @@ const updateDesignation = asyncHandler(async(req,res)=> {
     throw new ApiError(404, "Designation not found")
   }
 
-  // Check for duplicate name or code (excluding current designation)
   const duplicateDesignation = await prisma.designation.findFirst({
     where: {
       companyId,
@@ -223,48 +199,49 @@ const updateDesignation = asyncHandler(async(req,res)=> {
   return res.status(200).json(new ApiResponse(200, updatedDesignation, "Designation updated successfully"))
 })
 
-const getDesignationStats = asyncHandler(async(req,res) => {
-   const companyId = req.user?.companyId
+const deleteDesignation = asyncHandler(async (req, res) => {
+  const designationId = Number.parseInt(req.params?.id)
+  const companyId = req.user?.companyId
+  const currentUser = req.user
+  const userType = req.userType
 
-   const designationStats = await prisma.designation.findMany({
-    where:{companyId} , select:{
-      name:true,
-      id:true,
-      level:true,
-      code:true,
-      _count:{
-        select:{
-          employees:true,
-          payParameters:true
-        }
-      }
+  if (!designationId) {
+    throw new ApiError(400, "Designation ID is required")
+  }
+
+  // Permission check - only those with designation:manage can delete
+  if (!hasPermission(currentUser.role, userType, "designation:manage")) {
+    throw new ApiError(403, "Insufficient permissions to delete designations")
+  }
+
+  const designation = await prisma.designation.findFirst({
+    where: {
+      id: designationId,
+      companyId,
     },
-    orderBy:{name:'asc'}
-   })
-   
-
-   const totalDesignations = designationStats.length
-   const totalEmployees = designationStats.reduce((sum,desig)=> sum + desig._count.employees,0)
-   const avgEmployeesPerDept = totalDesignations > 0 ? (totalEmployees/totalDesignations) : 0
-
-
-   const statistics = {
-    overview: {
-      totalDesignations,
-      totalEmployees,
-      avgEmployeesPerDept
+    include: {
+      employees: true,
+      payParameters: true,
     },
-    designations: designationStats.map((desig)=> ({
-       id:desig.id,
-       name:desig.name,
-       code:desig.code,
-       level:desig.level,
-       employeeCount : desig._count.employees,
-       payParameterCount:desig._count.payParameters
-    }))
-   } 
+  })
 
- return res.status(200).json(new ApiResponse(200, statistics, "Designation statistics fetched successfully"))
+  if (!designation) {
+    throw new ApiError(404, "Designation not found")
+  }
+
+  if (designation.employees.length > 0) {
+    throw new ApiError(400, "Cannot delete designation with existing employees")
+  }
+
+  if (designation.payParameters.length > 0) {
+    throw new ApiError(400, "Cannot delete designation with existing pay parameters")
+  }
+
+  await prisma.designation.delete({
+    where: { id: designationId },
+  })
+
+  return res.status(200).json(new ApiResponse(200, {}, "Designation deleted successfully"))
 })
 
-export {addDesignation,getAllDesignations,deleteDesignation,updateDesignation,getDesignationById,getDesignationStats}
+export { addDesignation, getAllDesignations, getDesignationById, updateDesignation, deleteDesignation }

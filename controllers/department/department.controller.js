@@ -1,27 +1,33 @@
-import prisma from "../../config/prismaClient.js";
-import { asyncHandler } from "../../utils/asyncHandler.js";
-import { ApiError } from "../../utils/ApiError.js";
-import { ApiResponse } from "../../utils/ApiResponse.js";
+import prisma from "../../config/prismaClient.js"
+import { asyncHandler } from "../../utils/asyncHandler.js"
+import { ApiError } from "../../utils/ApiError.js"
+import { ApiResponse } from "../../utils/ApiResponse.js"
+import { hasPermission } from "../../middlewares/auth.middleware.js"
 
 const addDepartment = asyncHandler(async (req, res) => {
-  const { departmentName, departmentCode,description } = req.body;
+  const { departmentName, departmentCode, description } = req.body
+  const companyId = req.user?.companyId
+  const currentUser = req.user
+  const userType = req.userType
 
   if (!departmentName || !departmentCode || !description) {
-    throw new ApiError(400, "All fields are required");
+    throw new ApiError(400, "All fields are required")
   }
 
-  const companyId = req.user?.companyId;
+  // Permission check - only those with department:manage can create
+  if (!hasPermission(currentUser.role, userType, "department:manage")) {
+    throw new ApiError(403, "Insufficient permissions to create departments")
+  }
 
   const existingDepartment = await prisma.department.findFirst({
     where: {
       companyId: companyId,
-      name: departmentName,
-      code: departmentCode,
+      OR: [{ name: departmentName }, { code: departmentCode }],
     },
-  });
+  })
 
   if (existingDepartment) {
-    throw new ApiError(400, "The name of this department already exist");
+    throw new ApiError(400, "Department with this name or code already exists")
   }
 
   const department = await prisma.department.create({
@@ -34,27 +40,32 @@ const addDepartment = asyncHandler(async (req, res) => {
   })
 
   return res.status(201).json(new ApiResponse(201, department, "Department created successfully"))
-
-});
+})
 
 const getAllDepartments = asyncHandler(async (req, res) => {
-  const companyId = req.user?.companyId ;
-  const {includeStats = false,page,limit} = req.query
+  const companyId = req.user?.companyId
+  const { includeStats = false, page, limit } = req.query
+  const currentUser = req.user
+  const userType = req.userType
+
+  // Permission check - only those with department:read can view
+  if (!hasPermission(currentUser.role, userType, "department:read")) {
+    throw new ApiError(403, "Insufficient permissions to view departments")
+  }
 
   const queryOptions = {
-    where:{companyId},
-    orderBy:{name:'asc'}
-  }  
+    where: { companyId },
+    orderBy: { name: "asc" },
+  }
 
-
-  if(page && limit){
+  if (page && limit) {
     const skip = (Number.parseInt(page) - 1) * Number.parseInt(limit)
     const take = Number.parseInt(limit)
     queryOptions.skip = skip
     queryOptions.take = take
   }
 
-   if (includeStats === "true") {
+  if (includeStats === "true") {
     queryOptions.include = {
       _count: {
         select: {
@@ -63,17 +74,16 @@ const getAllDepartments = asyncHandler(async (req, res) => {
         },
       },
     }
-  }  
+  }
 
   const [departments, totalCount] = await Promise.all([
     prisma.department.findMany(queryOptions),
     page && limit ? prisma.department.count({ where: { companyId } }) : null,
   ])
 
-  const response = {departments} 
+  const response = { departments }
 
-
-   if (page && limit) {
+  if (page && limit) {
     response.pagination = {
       currentPage: Number.parseInt(page),
       totalPages: Math.ceil(totalCount / Number.parseInt(limit)),
@@ -84,14 +94,21 @@ const getAllDepartments = asyncHandler(async (req, res) => {
   }
 
   return res.status(200).json(new ApiResponse(200, response, "Departments fetched successfully"))
-});
+})
 
 const getDepartmentById = asyncHandler(async (req, res) => {
   const companyId = req.user?.companyId
   const departmentId = Number.parseInt(req.params?.id)
+  const currentUser = req.user
+  const userType = req.userType
 
   if (!departmentId) {
     throw new ApiError(400, "Department ID is required")
+  }
+
+  // Permission check - only those with department:read can view
+  if (!hasPermission(currentUser.role, userType, "department:read")) {
+    throw new ApiError(403, "Insufficient permissions to view department details")
   }
 
   const department = await prisma.department.findFirst({
@@ -126,14 +143,14 @@ const getDepartmentById = asyncHandler(async (req, res) => {
   }
 
   return res.status(200).json(new ApiResponse(200, department, "Department details fetched successfully"))
-})  
-
- 
+})
 
 const updateDepartment = asyncHandler(async (req, res) => {
   const companyId = req.user?.companyId
   const departmentId = Number.parseInt(req.params?.id)
   const { departmentName, departmentCode, description } = req.body
+  const currentUser = req.user
+  const userType = req.userType
 
   if (!departmentId) {
     throw new ApiError(400, "Department ID is required")
@@ -143,7 +160,11 @@ const updateDepartment = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Department name is required")
   }
 
-  // Check if department exists
+  // Permission check - only those with department:manage can update
+  if (!hasPermission(currentUser.role, userType, "department:manage")) {
+    throw new ApiError(403, "Insufficient permissions to update departments")
+  }
+
   const existingDepartment = await prisma.department.findFirst({
     where: { id: departmentId, companyId },
   })
@@ -152,7 +173,6 @@ const updateDepartment = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Department not found")
   }
 
-  // Check for duplicate name or code (excluding current department)
   const duplicateDepartment = await prisma.department.findFirst({
     where: {
       companyId,
@@ -177,15 +197,20 @@ const updateDepartment = asyncHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, updatedDepartment, "Department updated successfully"))
 })
 
-
-
 const deleteDepartment = asyncHandler(async (req, res) => {
-  const companyId = req.user?.companyId;
+  const companyId = req.user?.companyId
   const departmentId = Number.parseInt(req.params?.id)
+  const currentUser = req.user
+  const userType = req.userType
 
-  if(!departmentId) {
+  if (!departmentId) {
     throw new ApiError(400, "Department ID is required")
-  }  
+  }
+
+  // Permission check - only those with department:manage can delete
+  if (!hasPermission(currentUser.role, userType, "department:manage")) {
+    throw new ApiError(403, "Insufficient permissions to delete departments")
+  }
 
   const department = await prisma.department.findFirst({
     where: {
@@ -215,51 +240,6 @@ const deleteDepartment = asyncHandler(async (req, res) => {
   })
 
   return res.status(200).json(new ApiResponse(200, {}, "Department deleted successfully"))
-});
-
-const getDepartmentStatistics = asyncHandler(async(req,res) => {
-   const companyId = req.user?.companyId 
-
-   const departmentStats = await prisma.department.findMany( {
-         where:{companyId},
-         select:{
-          id:true,
-          name:true,
-          code:true,
-          _count:{
-             select:{
-               employees:true,
-               payParameters:true
-             }
-          }
-         },
-
-         orderBy:{name:'asc'}
-   })
-
-
-   const totalDepartments = departmentStats.length
-   const totalEmployees = departmentStats.reduce((sum,dept)=> sum + dept._count.employees, 0 )
-
-   const avgEmployeesPerDept = totalDepartments>0 ? Math.round(totalEmployees/totalDepartments) : 0
-
-    const statistics = {
-    overview: {
-      totalDepartments,
-      totalEmployees,
-      avgEmployeesPerDept,
-    },
-    departments: departmentStats.map((dept) => ({
-      id: dept.id,
-      name: dept.name,
-      code: dept.code,
-      employeeCount: dept._count.employees,
-      payParameterCount: dept._count.payParameters,
-    })),
-  }
-
-  return res.status(200).json(new ApiResponse(200, statistics, "Department statistics fetched successfully"))
 })
 
-
-export {addDepartment,getAllDepartments,deleteDepartment,updateDepartment,getDepartmentStatistics}
+export { addDepartment, getAllDepartments, getDepartmentById, updateDepartment, deleteDepartment }

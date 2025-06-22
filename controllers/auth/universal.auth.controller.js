@@ -1,7 +1,7 @@
-import prisma from "../../config/prismaClient";
-import { asyncHandler } from "../../utils/asyncHandler";
-import { ApiError } from "../../utils/ApiError";
-import { ApiResponse } from "../../utils/ApiResponse";
+import prisma from "../../config/prismaClient.js"
+import { asyncHandler } from "../../utils/asyncHandler.js"
+import { ApiError } from "../../utils/ApiError.js"
+import { ApiResponse } from "../../utils/ApiResponse.js"
 import {
   generateTokens,
   hashPassword,
@@ -9,53 +9,32 @@ import {
   updateRefreshToken,
   clearRefreshToken,
   getCookieOptions,
-} from "../../utils/auth.utils";
-
-import { uploadOnCloudinary } from "../../utils/cloudinary";
-
-import jwt from "jsonwebtoken";
+} from "../../utils/auth.utils.js"
+import { uploadOnCloudinary } from "../../utils/cloudinary.js"
+import { hasPermission } from "../../middlewares/auth.middleware.js"
+import jwt from "jsonwebtoken"
 
 const adminSignUp = asyncHandler(async (req, res) => {
-  const {
-    adminName,
-    email,
-    password,
-    mobile,
-    companyName,
-    industry,
-    address,
-    stateName,
-    cityName,
-  } = req.body;
+  const { adminName, email, password, mobile, companyName, industry, address, stateName, cityName } = req.body
 
-  const requiredFields = [
-    adminName,
-    email,
-    password,
-    mobile,
-    companyName,
-    industry,
-    address,
-    stateName,
-    cityName,
-  ];
+  const requiredFields = [adminName, email, password, mobile, companyName, industry, address, stateName, cityName]
+
   if (requiredFields.some((field) => !field?.trim())) {
-    throw new ApiError(400, "All fields are required");
+    throw new ApiError(400, "All fields are required")
   }
 
   if (password.length < 8) {
-    throw new ApiError(400, "Passwrod must be at least 8 characters long");
+    throw new ApiError(400, "Password must be at least 8 characters long")
   }
 
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-  if (emailRegex.test(email)) {
-    throw new ApiError(400, "Invalid email format");
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRegex.test(email)) {
+    throw new ApiError(400, "Invalid email format")
   }
 
-  const mobileRegex = /^[0-9]{10}$/;
+  const mobileRegex = /^[0-9]{10}$/
   if (!mobileRegex.test(mobile)) {
-    throw new ApiError(400, "Mobile number must be 10 digits");
+    throw new ApiError(400, "Mobile number must be 10 digits")
   }
 
   const [existingCompany, existingAdmin, locationData] = await Promise.all([
@@ -69,27 +48,24 @@ const adminSignUp = asyncHandler(async (req, res) => {
       where: { stateName },
       include: { cities: { where: { cityName }, take: 1 } },
     }),
-  ]);
+  ])
 
   if (existingCompany) {
-    throw new ApiError(
-      400,
-      "Company name already exists. Choose another name."
-    );
+    throw new ApiError(400, "Company name already exists. Choose another name.")
   }
 
   if (existingAdmin) {
-    throw new ApiError(400, "Admin with this email or mobile already exists");
+    throw new ApiError(400, "Admin with this email or mobile already exists")
   }
 
   if (!locationData || !locationData.cities[0]) {
-    throw new ApiError(400, "Invalid state or city");
+    throw new ApiError(400, "Invalid state or city")
   }
 
-  const hashedPassword = await hashPassword(password);
+  const hashedPassword = await hashPassword(password)
 
   const result = await prisma.$transaction(async (tx) => {
-    const company = await prisma.company.create({
+    const company = await tx.company.create({
       data: {
         name: companyName,
         industry,
@@ -97,9 +73,9 @@ const adminSignUp = asyncHandler(async (req, res) => {
         stateId: locationData.id,
         cityId: locationData.cities[0].id,
       },
-    });
+    })
 
-    const admin = await prisma.admin.create({
+    const admin = await tx.admin.create({
       data: {
         name: adminName,
         email: email,
@@ -115,17 +91,13 @@ const adminSignUp = asyncHandler(async (req, res) => {
         companyId: true,
         createdAt: true,
       },
-    });
+    })
 
-    return { company, admin };
-  });
+    return { company, admin }
+  })
 
-  return res
-    .status(201)
-    .json(
-      new ApiResponse(201, result, "Company and admin created successfully")
-    );
-});
+  return res.status(201).json(new ApiResponse(201, result, "Company and admin created successfully"))
+})
 
 const addEmployee = asyncHandler(async (req, res) => {
   const {
@@ -148,11 +120,11 @@ const addEmployee = asyncHandler(async (req, res) => {
     cityName,
     designationName,
     departmentName,
-  } = req.body;
+  } = req.body
 
-  const companyId = req.user?.companyId;
-  const currentUser = req.user;
-  const currentUserType = req.userType;
+  const companyId = req.user?.companyId
+  const currentUser = req.user
+  const currentUserType = req.userType
 
   const requiredFields = [
     employeeCode,
@@ -172,41 +144,39 @@ const addEmployee = asyncHandler(async (req, res) => {
     cityName,
     designationName,
     departmentName,
-  ];
+  ]
 
   if (requiredFields.some((field) => !field?.toString().trim())) {
-    throw new ApiError(400, "All required fields must be provided");
+    throw new ApiError(400, "All required fields must be provided")
   }
 
+  // Role assignment validation
   if (role && ["HR", "MANAGER", "ACCOUNTANT", "SR_MANAGER"].includes(role)) {
-    if (currentUserType !== "admin" && currentUser.role !== "HR") {
-      throw new ApiError(
-        403,
-        "Only company admin or HR can assign administrative roles"
-      );
+    if (currentUserType !== "admin" && !hasPermission(currentUser.role, currentUserType, "employee:manage")) {
+      throw new ApiError(403, "Insufficient permissions to assign administrative roles")
     }
 
     if (currentUser.role === "HR" && role === "SR_MANAGER") {
-      throw new ApiError(403, "HR cannot assign Senior Manager role");
+      throw new ApiError(403, "HR cannot assign Senior Manager role")
     }
   }
 
   if (password.length < 8) {
-    throw new ApiError(400, "Password must be at least 8 characters long");
+    throw new ApiError(400, "Password must be at least 8 characters long")
   }
 
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   if (!emailRegex.test(email)) {
-    throw new ApiError(400, "Invalid email format");
+    throw new ApiError(400, "Invalid email format")
   }
 
-  const mobileRegex = /^[0-9]{10}$/;
+  const mobileRegex = /^[0-9]{10}$/
   if (!mobileRegex.test(mobileNo)) {
-    throw new ApiError(400, "Mobile number must be 10 digits");
+    throw new ApiError(400, "Mobile number must be 10 digits")
   }
 
   if (Number.parseFloat(salary) <= 0) {
-    throw new ApiError(400, "Salary must be greater than 0");
+    throw new ApiError(400, "Salary must be greater than 0")
   }
 
   const existingEmployee = await prisma.employee.findFirst({
@@ -214,50 +184,45 @@ const addEmployee = asyncHandler(async (req, res) => {
       OR: [{ email }, { employeeCode }, { mobileNo }],
       companyId,
     },
-  });
+  })
 
   if (existingEmployee) {
-    throw new ApiError(
-      400,
-      "Employee with this email, mobile, or employee code already exists"
-    );
+    throw new ApiError(400, "Employee with this email, mobile, or employee code already exists")
   }
 
-  const profilePicPath = req.files?.profilePic?.[0]?.path;
-
+  const profilePicPath = req.files?.profilePic?.[0]?.path
   if (!profilePicPath) {
-    throw new ApiError(400, "Profile picture is required");
+    throw new ApiError(400, "Profile picture is required")
   }
 
-  const [locationData, department, designation, bankCodeData] =
-    await Promise.all([
-      prisma.state.findFirst({
-        where: { stateName },
-        include: { cities: { where: { cityName }, take: 1 } },
-      }),
-      prisma.department.findFirst({
-        where: { name: departmentName, companyId },
-      }),
-      prisma.designation.findFirst({
-        where: { name: designationName, companyId },
-      }),
-      prisma.bankCode.findUnique({ where: { code: bankCode } }),
-    ]);
+  const [locationData, department, designation, bankCodeData] = await Promise.all([
+    prisma.state.findFirst({
+      where: { stateName },
+      include: { cities: { where: { cityName }, take: 1 } },
+    }),
+    prisma.department.findFirst({
+      where: { name: departmentName, companyId },
+    }),
+    prisma.designation.findFirst({
+      where: { name: designationName, companyId },
+    }),
+    prisma.bankCode.findUnique({ where: { code: bankCode } }),
+  ])
 
   if (!locationData || !locationData.cities[0]) {
-    throw new ApiError(400, "Invalid state or city");
+    throw new ApiError(400, "Invalid state or city")
   }
 
-  if (!department) throw new ApiError(400, "Invalid department");
-  if (!designation) throw new ApiError(400, "Invalid designation");
-  if (!bankCodeData) throw new ApiError(400, "Invalid bank code");
+  if (!department) throw new ApiError(400, "Invalid department")
+  if (!designation) throw new ApiError(400, "Invalid designation")
+  if (!bankCodeData) throw new ApiError(400, "Invalid bank code")
 
-  const profilePicUri = await uploadOnCloudinary(profilePicPath);
+  const profilePicUri = await uploadOnCloudinary(profilePicPath)
   if (!profilePicUri?.url) {
-    throw new ApiError(400, "Failed to upload profile picture");
+    throw new ApiError(400, "Failed to upload profile picture")
   }
 
-  const hashedPassword = await hashPassword(password);
+  const hashedPassword = await hashPassword(password)
 
   const employee = await prisma.employee.create({
     data: {
@@ -302,44 +267,39 @@ const addEmployee = asyncHandler(async (req, res) => {
       city: { select: { cityName: true } },
       bankCode: { select: { code: true, name: true } },
     },
-  });
+  })
 
-  return res
-    .status(201)
-    .json(new ApiResponse(201, employee, "Employee created successfully"));
-});
+  return res.status(201).json(new ApiResponse(201, employee, "Employee created successfully"))
+})
 
 const universalLogin = asyncHandler(async (req, res) => {
-  const { emailOrMobile, password, userType } = req.body;
+  const { emailOrMobile, password, userType } = req.body
 
   if (!emailOrMobile || !password || !userType) {
-    throw new ApiError(
-      400,
-      "Email/Mobile, password, and user type are required"
-    );
+    throw new ApiError(400, "Email/Mobile, password, and user type are required")
   }
 
   if (!["admin", "employee"].includes(userType)) {
-    throw new ApiError(400, "User type must be either 'admin' or 'employee'");
+    throw new ApiError(400, "User type must be either 'admin' or 'employee'")
   }
 
-  const isEmail = emailOrMobile.includes("@");
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const mobileRegex = /^[0-9]{10}$/;
+  const isEmail = emailOrMobile.includes("@")
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const mobileRegex = /^[0-9]{10}$/
 
   if (isEmail && !emailRegex.test(emailOrMobile)) {
-    throw new ApiError(400, "Invalid email format");
+    throw new ApiError(400, "Invalid email format")
   }
   if (!isEmail && !mobileRegex.test(emailOrMobile)) {
-    throw new ApiError(400, "Invalid mobile number format");
+    throw new ApiError(400, "Invalid mobile number format")
   }
 
-  let user = null;
-  let foundUserType = null;
+  let user = null
+  let foundUserType = null
 
   try {
     if (userType === "admin") {
-      const searchField = isEmail ? "email" : "mobileNo";
+      const searchField = isEmail ? "email" : "mobile"
       user = await prisma.admin.findFirst({
         where: { [searchField]: emailOrMobile },
         select: {
@@ -357,10 +317,10 @@ const universalLogin = asyncHandler(async (req, res) => {
             },
           },
         },
-      });
-      foundUserType = "admin";
+      })
+      foundUserType = "admin"
     } else {
-      const searchField = isEmail ? "email" : "mobileNo";
+      const searchField = isEmail ? "email" : "mobileNo"
       user = await prisma.employee.findFirst({
         where: {
           [searchField]: emailOrMobile,
@@ -391,29 +351,24 @@ const universalLogin = asyncHandler(async (req, res) => {
             select: { name: true },
           },
         },
-      });
-      foundUserType = "employee";
+      })
+      foundUserType = "employee"
     }
 
     if (!user) {
-      throw new ApiError(
-        404,
-        `${userType} not found with provided credentials`
-      );
+      throw new ApiError(404, `${userType} not found with provided credentials`)
     }
 
-    const isPasswordValid = validatePassword(password, user.password);
-
+    const isPasswordValid = await validatePassword(password, user.password)
     if (!isPasswordValid) {
-      throw new ApiError(401, "Invalid password");
+      throw new ApiError(401, "Invalid password")
     }
 
-    const { accessToken, refreshToken } = generateTokens(user, foundUserType);
-    await updateRefreshToken(user.id, refreshToken, foundUserType);
+    const { accessToken, refreshToken } = generateTokens(user, foundUserType)
+    await updateRefreshToken(user.id, refreshToken, foundUserType)
 
-    const { password: _, ...userWithoutPassword } = user;
-
-    const cookieOptions = getCookieOptions();
+    const { password: _, ...userWithoutPassword } = user
+    const cookieOptions = getCookieOptions()
 
     return res
       .cookie("accessToken", accessToken, cookieOptions)
@@ -427,20 +382,20 @@ const universalLogin = asyncHandler(async (req, res) => {
             accessToken,
             refreshToken,
           },
-          `${foundUserType === "employee" ? "Employee" : "Admin"} logged in successfully`
-        )
-      );
+          `${foundUserType === "employee" ? "Employee" : "Admin"} logged in successfully`,
+        ),
+      )
   } catch (error) {
-    console.error("Universal login error:", error);
-    throw new ApiError(500, "Login failed. Please try again.");
+    console.error("Universal login error:", error)
+    throw new ApiError(500, "Login failed. Please try again.")
   }
-});
+})
 
 const getProfile = asyncHandler(async (req, res) => {
-  const userId = req.user.id;
-  const userType = req.userType;
+  const userId = req.user.id
+  const userType = req.userType
 
-  let profile = null;
+  let profile = null
 
   if (userType === "admin") {
     profile = await prisma.admin.findUnique({
@@ -462,7 +417,7 @@ const getProfile = asyncHandler(async (req, res) => {
           },
         },
       },
-    });
+    })
   } else {
     profile = await prisma.employee.findFirst({
       where: {
@@ -475,7 +430,7 @@ const getProfile = asyncHandler(async (req, res) => {
         name: true,
         email: true,
         mobileNo: true,
-        salary: true,
+        salary: hasPermission(req.user.role, userType, "payroll:read"),
         gender: true,
         dob: true,
         address1: true,
@@ -499,113 +454,99 @@ const getProfile = asyncHandler(async (req, res) => {
           },
         },
       },
-    });
+    })
   }
 
   if (!profile) {
-    throw new ApiError(404, `${userType} not found`);
+    throw new ApiError(404, `${userType} not found`)
   }
 
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(200, profile, `${userType} profile fetched successfully`)
-    );
-});
+  return res.status(200).json(new ApiResponse(200, profile, `${userType} profile fetched successfully`))
+})
 
 const logoutHandler = asyncHandler(async (req, res) => {
-  const userId = req.user?.id;
-  const userType = req.userType;
+  const userId = req.user?.id
+  const userType = req.userType
 
-  await clearRefreshToken(userId, userType);
+  await clearRefreshToken(userId, userType)
 
-  const cookieOptions = getCookieOptions();
+  const cookieOptions = getCookieOptions()
 
   return res
     .status(200)
     .clearCookie("accessToken", cookieOptions)
     .clearCookie("refreshToken", cookieOptions)
-    .json(new ApiResponse(200, {}, "Logged out successfully"));
-});
+    .json(new ApiResponse(200, {}, "Logged out successfully"))
+})
 
 const changePassword = asyncHandler(async (req, res) => {
-  const userId = req.user?.id;
-  const userType = req.userType;
+  const userId = req.user?.id
+  const userType = req.userType
+  const { oldPassword, newPassword, confirmNewPassword } = req.body
 
-  const { oldPassword, newPassword, confirmNewPassword } = req.body;
-
-  if (!oldPassword || !newPassword || !confirmNewPassword)
-    throw new ApiError(400, "All fields are required");
-
-  if (newPassword.length < 8) {
-    throw new ApiError(400, "New password must be at least 8 characters long");
+  if (!oldPassword || !newPassword || !confirmNewPassword) {
+    throw new ApiError(400, "All fields are required")
   }
 
-  let user = null;
+  if (newPassword.length < 8) {
+    throw new ApiError(400, "New password must be at least 8 characters long")
+  }
+
+  if (newPassword !== confirmNewPassword) {
+    throw new ApiError(400, "New password and confirm password do not match")
+  }
+
+  let user = null
 
   if (userType === "employee") {
-    user = await prisma.employee.findUnique({ where: { id: userId } });
+    user = await prisma.employee.findUnique({ where: { id: userId } })
   } else {
-    user = await prisma.employee.findUnique({ where: { id: userId } });
+    user = await prisma.admin.findUnique({ where: { id: userId } })
   }
 
   if (!user) {
-    throw new ApiError(404, "User not found");
+    throw new ApiError(404, "User not found")
   }
 
-  const isOldPasswordValid = await validatePassword(oldPassword, user.password);
-
+  const isOldPasswordValid = await validatePassword(oldPassword, user.password)
   if (!isOldPasswordValid) {
-    throw new ApiError(401, "Current password is incorrect");
+    throw new ApiError(401, "Current password is incorrect")
   }
 
-  const isSamePassword = await validatePassword(newPassword, user.password);
+  const isSamePassword = await validatePassword(newPassword, user.password)
   if (isSamePassword) {
-    throw new ApiError(
-      400,
-      "New password must be different from current password"
-    );
+    throw new ApiError(400, "New password must be different from current password")
   }
 
-  if (newPassword === confirmNewPassword) {
-    throw new ApiError(400, "Confirm password should be matched");
-  }
-
-  const newHashedPassword = await hashPassword(newPassword);
+  const newHashedPassword = await hashPassword(newPassword)
 
   if (userType === "employee") {
     await prisma.employee.update({
       where: { id: userId },
       data: { password: newHashedPassword },
-    });
+    })
   } else {
     await prisma.admin.update({
       where: { id: userId },
       data: { password: newHashedPassword },
-    });
+    })
   }
 
-  return res
-    .status(200)
-    .json(new ApiResponse(200, {}, "Password updated successfully"));
-});
+  return res.status(200).json(new ApiResponse(200, {}, "Password updated successfully"))
+})
 
 const refreshAccessToken = asyncHandler(async (req, res) => {
-  const incomingRefreshToken =
-    req.cookies.refreshToken || req.body.refreshToken;
+  const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken
 
   if (!incomingRefreshToken) {
-    throw new ApiError(401, "Refresh token required");
+    throw new ApiError(401, "Refresh token required")
   }
 
   try {
-    const decodedToken = jwt.verify(
-      incomingRefreshToken,
-      process.env.REFRESH_TOKEN_SECRET
-    );
-    const { userType } = decodedToken;
+    const decodedToken = jwt.verify(incomingRefreshToken, process.env.REFRESH_TOKEN_SECRET)
+    const { userType } = decodedToken
 
-    let user = null;
+    let user = null
 
     if (userType === "employee") {
       user = await prisma.employee.findUnique({
@@ -619,7 +560,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
           role: true,
           companyId: true,
         },
-      });
+      })
     } else {
       user = await prisma.admin.findUnique({
         where: { id: decodedToken._id },
@@ -630,25 +571,21 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
           email: true,
           companyId: true,
         },
-      });
+      })
     }
 
     if (!user || user.id !== decodedToken._id) {
-      throw new ApiError(401, "Invalid refresh token");
+      throw new ApiError(401, "Invalid refresh token")
     }
 
     if (userType === "employee" && !user.isActive) {
-      throw new ApiError(403, "Employee account is inactive");
+      throw new ApiError(403, "Employee account is inactive")
     }
 
-    const { accessToken, refreshToken: newRefreshToken } = await generateTokens(
-      user,
-      userType
-    );
+    const { accessToken, refreshToken: newRefreshToken } = await generateTokens(user, userType)
+    await updateRefreshToken(user.id, newRefreshToken, userType)
 
-    await updateRefreshToken(user.id, newRefreshToken, userType);
-
-    const cookieOptions = getCookieOptions();
+    const cookieOptions = getCookieOptions()
 
     return res
       .status(200)
@@ -661,132 +598,12 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
             accessToken,
             refreshToken: newRefreshToken,
           },
-          "Access token refreshed successfully"
-        )
-      );
+          "Access token refreshed successfully",
+        ),
+      )
   } catch (error) {
-    throw new ApiError(401, error?.message || "Invalid refresh token");
+    throw new ApiError(401, error?.message || "Invalid refresh token")
   }
-});
+})
 
-const updateProfile = asyncHandler(async (req, res) => {
-  const userId = req.user?.id;
-  const userType = req.userType;
-  const updateData = req.body;
-
-  const restrictedFields = [
-    "password",
-    "companyId",
-    "salary",
-    "role",
-    "employeeCode",
-  ];
-  restrictedFields.forEach((field) => delete updateData[field]);
-
-  let updatedProfile = null;
-
-  if (userType === "admin") {
-    const allowedFields = ["name", "email", "mobile"];
-    const filteredData = {};
-
-    allowedFields.forEach((field) => {
-      if (updateData[field] !== undefined) {
-        filteredData[field] = updateData[field];
-      }
-    });
-
-    if (Object.keys(filteredData).length === 0) {
-      throw new ApiError(400, "No valid fields to update");
-    }
-
-    if (filteredData.email || filteredData.mobile) {
-      const existingAdmin = await prisma.admin.findFirst({
-        where: {
-          OR: [
-            ...(filteredData.email ? [{ email: filteredData.email }] : []),
-            ...(filteredData.mobile ? [{ mobile: filteredData.mobile }] : []),
-          ],
-          id: { not: userId },
-        },
-      });
-
-      if (existingAdmin) {
-        throw new ApiError(400, "Email or mobile already in use");
-      }
-    }
-
-    updatedProfile = await prisma.admin.update({
-      where: { id: userId },
-      data: filteredData,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        mobile: true,
-        updatedAt: true,
-      },
-    });
-  } else {
-    const allowedFields = ["name", "email", "mobileNo", "address1", "address2"];
-    const filteredData = {};
-
-    allowedFields.forEach((field) => {
-      if (updateData[field] !== undefined) {
-        filteredData[field] = updateData[field];
-      }
-    });
-
-    if (Object.keys(filteredData).length === 0) {
-      throw new ApiError(400, "No valid fields to update");
-    }
-
-    // Validate email and mobile uniqueness
-    if (filteredData.email || filteredData.mobileNo) {
-      const existingEmployee = await prisma.employee.findFirst({
-        where: {
-          OR: [
-            ...(filteredData.email ? [{ email: filteredData.email }] : []),
-            ...(filteredData.mobileNo
-              ? [{ mobileNo: filteredData.mobileNo }]
-              : []),
-          ],
-          id: { not: userId },
-          companyId: req.user.companyId,
-        },
-      });
-
-      if (existingEmployee) {
-        throw new ApiError(400, "Email or mobile already in use");
-      }
-    }
-
-    updatedProfile = await prisma.employee.update({
-      where: { id: userId },
-      data: filteredData,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        mobileNo: true,
-        address1: true,
-        address2: true,
-        updatedAt: true,
-      },
-    });
-  }
-
-  return res
-    .status(200)
-    .json(new ApiResponse(200, updatedProfile, "Profile updated successfully"));
-});
-
-export {
-  adminSignUp,
-  addEmployee,
-  refreshAccessToken,
-  changePassword,
-  getProfile,
-  logoutHandler,
-  universalLogin,
-  updateProfile,
-};
+export { adminSignUp, addEmployee, changePassword, getProfile, logoutHandler, universalLogin, refreshAccessToken } 
