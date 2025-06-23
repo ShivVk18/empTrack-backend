@@ -22,8 +22,6 @@ enum EmployeeRole {
   MANAGER
   ACCOUNTANT
   SR_MANAGER
-  TEAM_LEAD
-  SUPERVISOR
 }
 
 enum Gender {
@@ -77,8 +75,14 @@ model Admin {
   email        String   @unique
   password     String
   mobile       String   @unique
-  companyId    Int      @unique // One-to-One relationship
+  companyId    Int      @unique 
   refreshToken String?
+
+  otp          String?
+  otpExpiry    DateTime?
+  isOtpVerified  Boolean  @default(false)
+  otpAttemps     Int      @default(0)
+
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -95,17 +99,24 @@ model Employee {
   mobileNo     String       @unique
   password     String
   salary       Float
-  gender       Gender // Using enum
+  gender       Gender 
   dob          DateTime
   address1     String
   address2     String?
-  type         EmployeeType // Using enum
-  role         EmployeeRole @default(EMPLOYEE) // Using enum
+  type         EmployeeType 
+  role         EmployeeRole @default(EMPLOYEE) 
   profilePic   String
   accountNo    String
   pfAccountNo  String
   isActive     Boolean      @default(true)
   refreshToken String?
+
+  otp          String?
+  otpExpiry    DateTime?
+  isOtpVerified  Boolean  @default(false)
+  otpAttemps     Int      @default(0)
+
+
   joinedAt     DateTime     @default(now())
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt

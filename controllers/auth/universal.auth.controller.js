@@ -13,6 +13,7 @@ import {
 import { uploadOnCloudinary } from "../../utils/cloudinary.js"
 import { hasPermission } from "../../middlewares/auth.middleware.js"
 import jwt from "jsonwebtoken"
+import { sendWelcomeEmail } from "../email/email.controller.js"
 
 const adminSignUp = asyncHandler(async (req, res) => {
   const { adminName, email, password, mobile, companyName, industry, address, stateName, cityName } = req.body
@@ -268,6 +269,15 @@ const addEmployee = asyncHandler(async (req, res) => {
       bankCode: { select: { code: true, name: true } },
     },
   })
+  
+  const temporaryPassword = req.body.password
+
+  try {
+    await sendWelcomeEmail(employee,temporaryPassword)
+    console.log(`Welcome email sent to ${employee.email}`)
+  } catch (error) {
+    console.error("Failed to send welcome email:", error)
+  }
 
   return res.status(201).json(new ApiResponse(201, employee, "Employee created successfully"))
 })
@@ -364,27 +374,24 @@ const universalLogin = asyncHandler(async (req, res) => {
       throw new ApiError(401, "Invalid password")
     }
 
-    const { accessToken, refreshToken } = generateTokens(user, foundUserType)
-    await updateRefreshToken(user.id, refreshToken, foundUserType)
+    
 
     const { password: _, ...userWithoutPassword } = user
-    const cookieOptions = getCookieOptions()
+    
 
-    return res
-      .cookie("accessToken", accessToken, cookieOptions)
-      .cookie("refreshToken", refreshToken, cookieOptions)
-      .json(
-        new ApiResponse(
-          200,
-          {
-            user: userWithoutPassword,
-            userType: foundUserType,
-            accessToken,
-            refreshToken,
-          },
-          `${foundUserType === "employee" ? "Employee" : "Admin"} logged in successfully`,
-        ),
-      )
+
+     return res.status(200).json(
+      new ApiResponse(
+        200,
+        {
+          user: userWithoutPassword,
+          userType: foundUserType,
+          requiresOTP: true,
+          message: "Credentials verified. Please verify OTP to complete login.",
+        },
+        "Credentials verified successfully",
+      ),
+    )
   } catch (error) {
     console.error("Universal login error:", error)
     throw new ApiError(500, "Login failed. Please try again.")
