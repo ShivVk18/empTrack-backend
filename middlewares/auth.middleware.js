@@ -68,7 +68,7 @@ const authenticate = asyncHandler(async (req, res, next) => {
 
 const ROLE_PERMISSIONS = {
 
-  admin: ["*"], // Wildcard for full access
+  admin: ["*"], 
 
  
   HR: [
@@ -172,7 +172,7 @@ const requireRole = (allowedRoles) => {
       throw new ApiError(401, "User role not found")
     }
 
-    // Admin bypasses role restrictions
+    
     if (userType === "admin") {
       return next()
     }
@@ -198,7 +198,7 @@ const requireSeniorRole = requireRole(["HR", "SR_MANAGER"])
 
 const requireFinancialRole = requireRole(["HR", "ACCOUNTANT", "SR_MANAGER"])
 
-// Company and self access middlewares
+
 const ensureCompanyAccess = asyncHandler(async (req, res, next) => {
   const userCompanyId = req.user?.companyId
 
@@ -215,16 +215,16 @@ const ensureSelfOrManagerialAccess = asyncHandler(async (req, res, next) => {
   const userType = req.userType
   const userRole = req.user?.role
 
-  // Admin has full access
+  
   if (userType === "admin") return next()
 
-  // Managerial roles have broader access
+  
   const managerialRoles = ["HR", "SR_MANAGER", "MANAGER", "ACCOUNTANT"]
   if (managerialRoles.includes(userRole)) {
     return next()
   }
 
-  // Regular employees can only access their own data
+  
   if (targetUserId && targetUserId !== userId) {
     throw new ApiError(403, "Can only access your own data")
   }

@@ -25,72 +25,75 @@ const createPayParameter = asyncHandler(async (req, res) => {
   const companyId = req.user?.companyId;
   if (!companyId) throw new ApiError(401, "Unauthorized access");
 
-  if(!employeeType){
-     throw  new ApiError(400,"Employee type is required")
+  if (!employeeType) {
+    throw new ApiError(400, "Employee type is required");
   }
 
-  const validEmployeeType  = ["PERMANENT", "CONTRACT", "INTERN", "CONSULTANT", "PART_TIME"]
+  const validEmployeeType = [
+    "PERMANENT",
+    "CONTRACT",
+    "INTERN",
+    "CONSULTANT",
+    "PART_TIME",
+  ];
 
-  if(!validEmployeeType.includes(employeeType)){
-    throw new ApiError(400,"Invalid Employee Type")
+  if (!validEmployeeType.includes(employeeType)) {
+    throw new ApiError(400, "Invalid Employee Type");
   }
 
-    const existingParam = await prisma.payParameter.findFirst({
+  const existingParam = await prisma.payParameter.findFirst({
     where: {
       companyId,
-      employeeType:employeeType
+      employeeType: employeeType,
     },
   });
 
   if (existingParam) {
-    throw new ApiError(400, `Pay parameter for employee type '${employeeType}' already exists`)
+    throw new ApiError(
+      400,
+      `Pay parameter for employee type '${employeeType}' already exists`
+    );
   }
-       
-  
-  let departmentId = null
-  let designationId = null
+
+  let departmentId = null;
+  let designationId = null;
 
   if (departmentName) {
     const department = await prisma.department.findFirst({
       where: { name: departmentName, companyId },
-    })
-    if (!department) throw new ApiError(400, "Invalid department name")
-    departmentId = department.id
+    });
+    if (!department) throw new ApiError(400, "Invalid department name");
+    departmentId = department.id;
   }
 
   if (designationName) {
     const designation = await prisma.designation.findFirst({
       where: { name: designationName, companyId },
-    })
-    if (!designation) throw new ApiError(400, "Invalid designation name")
-    designationId = designation.id
+    });
+    if (!designation) throw new ApiError(400, "Invalid designation name");
+    designationId = designation.id;
   }
-     
-  
-//validate percentage values
-const percentageFields = {
-  da,
-  ta,
-  hra,
-  spall,
-  medicalAllRate,
-  epfRate,
-  esiRate,
-  tdsRate,
-  professionalTaxRate,
-}
 
+  //validate percentage values
+  const percentageFields = {
+    da,
+    ta,
+    hra,
+    spall,
+    medicalAllRate,
+    epfRate,
+    esiRate,
+    tdsRate,
+    professionalTaxRate,
+  };
 
-for (let key in percentageFields) {
-  const val = percentageFields[key]
+  for (let key in percentageFields) {
+    const val = percentageFields[key];
 
-  
-  if (val !== undefined && (val < 0 || val > 100)) {
-    throw new ApiError(400, `${key} must be between 0 and 100`)
+    if (val !== undefined && (val < 0 || val > 100)) {
+      throw new ApiError(400, `${key} must be between 0 and 100`);
+    }
   }
-}
-
-  
 
   const payParameter = await prisma.payParameter.create({
     data: {
@@ -112,9 +115,9 @@ for (let key in percentageFields) {
       epfSalaryLimit: epfSalaryLimit || 15000,
     },
     include: {
-      company: {select:{name:true}},
-      department: {select:{name:true}},
-      designation: {select:{name:true}},
+      company: { select: { name: true } },
+      department: { select: { name: true } },
+      designation: { select: { name: true } },
     },
   });
 
@@ -125,130 +128,131 @@ for (let key in percentageFields) {
     );
 });
 
+const getPayParameters = asyncHandler(async (req, res) => {
+  const companyId = req.user?.companyId;
 
-const getPayParameters = asyncHandler(async(req,res)=> {
-  const companyId = req.user?.companyId
+  const { page, limit, employeeType, departmentName, designationName } =
+    req.query;
 
-  const {page,limit,employeeType,departmentName,designationName} = req.query
+  if (!companyId) throw new ApiError(401, "Unauthorized access");
 
-   if (!companyId) throw new ApiError(401, "Unauthorized access")
+  const whereClause = { companyId };
 
-  const whereClause = {companyId}
-
-  if(employeeType){
-    whereClause.employeeType = employeeType
+  if (employeeType) {
+    whereClause.employeeType = employeeType;
   }
 
-  if(departmentName){
-     const department = await prisma.department.findFirst({
-      where:{name:departmentName,companyId:companyId}
-     })
+  if (departmentName) {
+    const department = await prisma.department.findFirst({
+      where: { name: departmentName, companyId: companyId },
+    });
 
-     if(department){
-      whereClause.departmentId = department.id
-     }
+    if (department) {
+      whereClause.departmentId = department.id;
+    }
   }
 
-
-  if(designationName) {
+  if (designationName) {
     const designation = await prisma.designation.findFirst({
-      where:{name:departmentName,companyId:companyId}
-    })
-    if(designation){
-      whereClause.designationId = designation.id
+      where: { name: departmentName, companyId: companyId },
+    });
+    if (designation) {
+      whereClause.designationId = designation.id;
     }
   }
 
   const queryOptions = {
-    where:{whereClause},
-    include:{ 
-      designation:{select:{name:true}},
-      department:{select:{name:true}}
+    where: { whereClause },
+    include: {
+      designation: { select: { name: true } },
+      department: { select: { name: true } },
     },
-    orderBy:[{employeeType:'asc'} ,{department:{name:'asc'}}],
+    orderBy: [{ employeeType: "asc" }, { department: { name: "asc" } }],
+  };
+
+  if (page && limit) {
+    const skip = (Number.parseInt(page) - 1) * Number.parseInt(limit);
+    const take = Number.parseInt(limit);
+    queryOptions.skip = skip;
+    queryOptions.take = take;
   }
 
-  if(page && limit){
-    const skip = (Number.parseInt(page) - 1) * Number.parseInt(limit)
-    const take = Number.parseInt(limit)
-    queryOptions.skip = skip
-    queryOptions.take = take
-  }
-
-  const [payParameters,totalCount] = await Promise.all([
+  const [payParameters, totalCount] = await Promise.all([
     prisma.payParameter.findMany(queryOptions),
-    page && limit ? prisma.payParameter.count({where:whereClause}) : null
-  ])
+    page && limit ? prisma.payParameter.count({ where: whereClause }) : null,
+  ]);
 
-  if(payParameters.length === 0){
-     throw new ApiError(404, "No pay parameters found")
+  if (payParameters.length === 0) {
+    throw new ApiError(404, "No pay parameters found");
   }
 
-  const response = {payParameters}
+  const response = { payParameters };
 
-   if (page && limit) {
+  if (page && limit) {
     response.pagination = {
       currentPage: Number.parseInt(page),
       totalPages: Math.ceil(totalCount / Number.parseInt(limit)),
       totalCount,
       hasNext: Number.parseInt(page) * Number.parseInt(limit) < totalCount,
       hasPrev: Number.parseInt(page) > 1,
-    }
+    };
   }
 
-   return res.status(200).json(new ApiResponse(200, response, "Pay parameters fetched successfully"))
-})  
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, response, "Pay parameters fetched successfully")
+    );
+});
 
-const getPayParametersByType = asyncHandler(async(req,res) => {
-  const {employeeType} = req.params
-  const companyId = req.user?.companyId
+const getPayParametersByType = asyncHandler(async (req, res) => {
+  const { employeeType } = req.params;
+  const companyId = req.user?.companyId;
 
-    if (!companyId) throw new ApiError(401, "Unauthorized access")
-  if (!employeeType) throw new ApiError(400, "Employee type is required")
+  if (!companyId) throw new ApiError(401, "Unauthorized access");
+  if (!employeeType) throw new ApiError(400, "Employee type is required");
 
-    const payParameter = await prisma.payParameter.findFirst({
-      where:{
-        employeeType:employeeType,
-        companyId:companyId
-      },
-      include: {
-        designation:{select:{name:true}},
-        department:{select:{name:true}}
-      }
-    })
+  const payParameter = await prisma.payParameter.findFirst({
+    where: {
+      employeeType: employeeType,
+      companyId: companyId,
+    },
+    include: {
+      designation: { select: { name: true } },
+      department: { select: { name: true } },
+    },
+  });
 
-    if(!payParameter) {
-       throw new ApiError(404,`Pay parameter for ${employeeType} not found`)
-    }
+  if (!payParameter) {
+    throw new ApiError(404, `Pay parameter for ${employeeType} not found`);
+  }
 
-    res.status(200).json (
-      new ApiResponse(200,payParameter,"Pay parameter fetched successfully")
-    )
-})
- 
-
-
-
+  res
+    .status(200)
+    .json(
+      new ApiResponse(200, payParameter, "Pay parameter fetched successfully")
+    );
+});
 
 const updatePayParameter = asyncHandler(async (req, res) => {
-  const { id } = req.params
-  const companyId = req.user?.companyId
+  const { id } = req.params;
+  const companyId = req.user?.companyId;
 
-  if (!companyId) throw new ApiError(401, "Unauthorized access")
-  if (!id) throw new ApiError(400, "Pay parameter ID is required")
+  if (!companyId) throw new ApiError(401, "Unauthorized access");
+  if (!id) throw new ApiError(400, "Pay parameter ID is required");
 
   const payParameter = await prisma.payParameter.findFirst({
     where: {
       id: Number.parseInt(id),
       companyId,
     },
-  })
+  });
 
   if (!payParameter) {
-    throw new ApiError(404, "Pay parameter not found")
+    throw new ApiError(404, "Pay parameter not found");
   }
 
-  const updateData = {}
+  const updateData = {};
   const allowedFields = [
     "da",
     "ta",
@@ -262,16 +266,16 @@ const updatePayParameter = asyncHandler(async (req, res) => {
     "professionalTaxRate",
     "esiSalaryLimit",
     "epfSalaryLimit",
-  ]
+  ];
 
   allowedFields.forEach((field) => {
     if (req.body[field] !== undefined) {
-      updateData[field] = req.body[field]
+      updateData[field] = req.body[field];
     }
-  })
+  });
 
   if (Object.keys(updateData).length === 0) {
-    throw new ApiError(400, "No valid fields to update")
+    throw new ApiError(400, "No valid fields to update");
   }
 
   // Validate percentage values
@@ -285,10 +289,13 @@ const updatePayParameter = asyncHandler(async (req, res) => {
     "esiRate",
     "tdsRate",
     "professionalTaxRate",
-  ]
+  ];
   for (const field of percentageFields) {
-    if (updateData[field] !== undefined && (updateData[field] < 0 || updateData[field] > 100)) {
-      throw new ApiError(400, `${field} must be between 0 and 100`)
+    if (
+      updateData[field] !== undefined &&
+      (updateData[field] < 0 || updateData[field] > 100)
+    ) {
+      throw new ApiError(400, `${field} must be between 0 and 100`);
     }
   }
 
@@ -299,29 +306,35 @@ const updatePayParameter = asyncHandler(async (req, res) => {
       department: { select: { name: true } },
       designation: { select: { name: true } },
     },
-  })
+  });
 
-  return res.status(200).json(new ApiResponse(200, updatedPayParameter, "Pay parameter updated successfully"))
-})
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        updatedPayParameter,
+        "Pay parameter updated successfully"
+      )
+    );
+});
 
+const deletePayparameter = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const companyId = req.user?.companyId;
 
-const deletePayparameter = asyncHandler(async(req,res)=> {
-    const {id} = req.params
-    const companyId = req.user?.companyId
-     
-  if (!companyId) throw new ApiError(401, "Unauthorized access")
-  if (!id) throw new ApiError(400, "Pay parameter ID is required")
-
+  if (!companyId) throw new ApiError(401, "Unauthorized access");
+  if (!id) throw new ApiError(400, "Pay parameter ID is required");
 
   const payParameter = await prisma.payParameter.findFirst({
     where: {
       id: Number.parseInt(id),
       companyId,
     },
-  })
+  });
 
   if (!payParameter) {
-    throw new ApiError(404, "Pay parameter not found")
+    throw new ApiError(404, "Pay parameter not found");
   }
 
   const payrollCount = await prisma.payMaster.count({
@@ -331,18 +344,28 @@ const deletePayparameter = asyncHandler(async(req,res)=> {
         type: payParameter.employeeType,
       },
     },
-  })
+  });
 
   if (payrollCount > 0) {
-    throw new ApiError(400, "Cannot delete pay parameter that has been used in payroll generation")
+    throw new ApiError(
+      400,
+      "Cannot delete pay parameter that has been used in payroll generation"
+    );
   }
 
   await prisma.payParameter.delete({
     where: { id: Number.parseInt(id) },
-  })
+  });
 
-  return res.status(200).json(new ApiResponse(200, {}, "Pay parameter deleted successfully"))
-})
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Pay parameter deleted successfully"));
+});
 
-
-export { createPayParameter, getPayParameters, deletePayparameter,getPayParametersByType,updatePayParameter };
+export {
+  createPayParameter,
+  getPayParameters,
+  deletePayparameter,
+  getPayParametersByType,
+  updatePayParameter,
+};
