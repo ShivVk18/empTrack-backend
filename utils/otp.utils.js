@@ -60,12 +60,12 @@ const sendOTP = async(email,otp,userName) => {
 }
 
 const sendOTPSMS = async(mobile,otp,userName) => {
-    const message = await createMessage(mobile,otp,userName)
+    const messageSid = await createMessage(mobile, otp, userName)
 
-    if(message.length>0) {
-       return { success: true, message: "OTP sent via SMS" }
-    }else {
-        return {success:false,message:"Otp generation failed"}
+    if (messageSid) {
+        return { success: true, message: "OTP sent via SMS" }
+    } else {
+        return { success: false, message: "OTP generation failed" }
     }
 
 

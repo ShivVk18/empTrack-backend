@@ -12,7 +12,7 @@ const createMessage = async(mobile,otp,userName) => {
         to:mobile
     })
 
-    return message.body
+    return message.sid
 }
 
 export {createMessage}
