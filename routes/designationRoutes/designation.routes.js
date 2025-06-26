@@ -9,8 +9,7 @@ import {
 import {
   addDesignation,
   deleteDesignation,
-  getAllDesignations,
-  getDesignationById,
+  getAllDesignationsByDepartment,
   updateDesignation,
 } from "../../controllers/designation/designation.controller.js";
 
@@ -19,11 +18,16 @@ const router = express.Router();
 router.use(authenticate);
 router.use(ensureCompanyAccess);
 
-router.post("/", requirePermission("designation:manage"), addDesignation);
 
-router.get("/", requirePermission("designation:read"), getAllDesignations);
+router.post("/addDesignation", requirePermission("designation:manage"), addDesignation);
 
-router.get("/:id", requirePermission("designation:read"), getDesignationById);
+
+router.get(
+  "/",
+  requirePermission("designation:read"),
+  getAllDesignationsByDepartment
+);
+
 
 router.patch(
   "/:id",
@@ -31,6 +35,7 @@ router.patch(
   requirePermission("designation:manage"),
   updateDesignation
 );
+
 
 router.delete(
   "/:id",

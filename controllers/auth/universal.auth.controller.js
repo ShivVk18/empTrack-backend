@@ -321,7 +321,10 @@ const addEmployee = asyncHandler(async (req, res) => {
 });
 
 const universalLogin = asyncHandler(async (req, res) => {
+
+  console.log("REQ BODY:", req.body);
   const { emailOrMobile, password, userType } = req.body;
+   
 
   if (!emailOrMobile || !password || !userType) {
     throw new ApiError(

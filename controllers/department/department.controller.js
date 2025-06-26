@@ -50,7 +50,6 @@ const getAllDepartments = asyncHandler(async (req, res) => {
   const currentUser = req.user;
   const userType = req.userType;
 
-  
   if (!hasPermission(currentUser.role, userType, "department:read")) {
     throw new ApiError(403, "Insufficient permissions to view departments");
   }
@@ -58,24 +57,25 @@ const getAllDepartments = asyncHandler(async (req, res) => {
   const queryOptions = {
     where: { companyId },
     orderBy: { name: "asc" },
+    include: {
+      designations: {
+        select: { id: true, name: true, code: true, description: true, level: true },
+        orderBy: { name: "asc" },
+      },
+    },
   };
+
+  if (includeStats === "true") {
+    queryOptions.include._count = {
+      select: { employees: true, payParameters: true },
+    };
+  }
 
   if (page && limit) {
     const skip = (Number.parseInt(page) - 1) * Number.parseInt(limit);
     const take = Number.parseInt(limit);
     queryOptions.skip = skip;
     queryOptions.take = take;
-  }
-
-  if (includeStats === "true") {
-    queryOptions.include = {
-      _count: {
-        select: {
-          employees: true,
-          payParameters: true,
-        },
-      },
-    };
   }
 
   const [departments, totalCount] = await Promise.all([
@@ -95,10 +95,9 @@ const getAllDepartments = asyncHandler(async (req, res) => {
     };
   }
 
-  return res
-    .status(200)
-    .json(new ApiResponse(200, response, "Departments fetched successfully"));
+  return res.status(200).json(new ApiResponse(200, response, "Departments fetched successfully"));
 });
+
 
 const getDepartmentById = asyncHandler(async (req, res) => {
   const companyId = req.user?.companyId;
@@ -111,18 +110,16 @@ const getDepartmentById = asyncHandler(async (req, res) => {
   }
 
   if (!hasPermission(currentUser.role, userType, "department:read")) {
-    throw new ApiError(
-      403,
-      "Insufficient permissions to view department details"
-    );
+    throw new ApiError(403, "Insufficient permissions to view department details");
   }
 
   const department = await prisma.department.findFirst({
-    where: {
-      id: departmentId,
-      companyId,
-    },
+    where: { id: departmentId, companyId },
     include: {
+      designations: {
+        select: { id: true, name: true, code: true, description: true, level: true },
+        orderBy: { name: "asc" },
+      },
       employees: {
         select: {
           id: true,
@@ -136,10 +133,7 @@ const getDepartmentById = asyncHandler(async (req, res) => {
         orderBy: { name: "asc" },
       },
       _count: {
-        select: {
-          employees: true,
-          payParameters: true,
-        },
+        select: { employees: true, payParameters: true },
       },
     },
   });
@@ -148,16 +142,9 @@ const getDepartmentById = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Department not found");
   }
 
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(
-        200,
-        department,
-        "Department details fetched successfully"
-      )
-    );
+  return res.status(200).json(new ApiResponse(200, department, "Department details fetched successfully"));
 });
+
 
 const updateDepartment = asyncHandler(async (req, res) => {
   const companyId = req.user?.companyId;
@@ -169,12 +156,9 @@ const updateDepartment = asyncHandler(async (req, res) => {
   if (!departmentId) {
     throw new ApiError(400, "Department ID is required");
   }
-
   if (!departmentName) {
     throw new ApiError(400, "Department name is required");
   }
-
-  
   if (!hasPermission(currentUser.role, userType, "department:manage")) {
     throw new ApiError(403, "Insufficient permissions to update departments");
   }
@@ -211,11 +195,7 @@ const updateDepartment = asyncHandler(async (req, res) => {
     },
   });
 
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(200, updatedDepartment, "Department updated successfully")
-    );
+  return res.status(200).json(new ApiResponse(200, updatedDepartment, "Department updated successfully"));
 });
 
 const deleteDepartment = asyncHandler(async (req, res) => {

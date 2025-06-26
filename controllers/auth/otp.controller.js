@@ -6,10 +6,10 @@ import { ApiResponse } from "../../utils/ApiResponse.js";
 import {
   isOTPExpired,
   generateOTP,
-  sendOTP,
   isValidOTPFormat,
   generateOTPExpiry,
-  sendOTPSMS,
+  
+  sendOTPEmail,
 } from "../../utils/otp.utils.js";
 
 import {
@@ -29,8 +29,8 @@ const sendLoginOTP = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Invalid user type");
   }
 
-  if (!["email", "sms", "both"].includes(method)) {
-    throw new ApiError(400, "Invalid OTP delivery method");
+  if (method !== "email") {
+    throw new ApiError(400, "Only email delivery method is supported");
   }
 
   let user = null;
@@ -38,25 +38,12 @@ const sendLoginOTP = asyncHandler(async (req, res) => {
   if (userType === "admin") {
     user = await prisma.admin.findUnique({
       where: { id: Number.parseInt(userId) },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        mobile: true,
-        otpAttemps: true,
-      },
+      select: { id: true, name: true, email: true, otpAttemps: true, otpBlockedUntil: true },
     });
   } else {
     user = await prisma.employee.findUnique({
       where: { id: Number.parseInt(userId) },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        mobileNo: true,
-        otpAttemps: true,
-        isActive: true,
-      },
+      select: { id: true, name: true, email: true, otpAttemps: true, isActive: true, otpBlockedUntil: true },
     });
   }
 
@@ -68,219 +55,227 @@ const sendLoginOTP = asyncHandler(async (req, res) => {
     throw new ApiError(403, "Employee account is inactive");
   }
 
-  if (user.otpAttemps >= 5) {
-    throw new ApiError(
-      429,
-      "Too many OTP requests. Please try again after 1 hour."
-    );
+  if (user.otpBlockedUntil && new Date() < new Date(user.otpBlockedUntil)) {
+    throw new ApiError(429, "Too many OTP requests. Please try again after 1 hour.");
+  }
+
+  if (user.otpBlockedUntil && new Date() >= new Date(user.otpBlockedUntil)) {
+    await prisma[userType].update({
+      where: { id: user.id },
+      data: { otpAttemps: 0, otpBlockedUntil: null },
+    });
+    user.otpAttemps = 0;
+    user.otpBlockedUntil = null;
   }
 
   const otp = generateOTP();
   const otpExpiry = generateOTPExpiry();
 
-  const updateData = {
-    otp,
-    otpExpiry,
-    isOtpVerified: false,
-    otpAttemps: user.otpAttemps + 1,
-  };
+  await prisma[userType].update({
+    where: { id: user.id },
+    data: {
+      otp,
+      otpExpiry,
+      isOtpVerified: false,
+      otpAttemps: user.otpAttemps + 1,
+    },
+  });
 
-  if (userType === "admin") {
-    await prisma.admin.update({
-      where: { id: user.id },
-      data: updateData,
-    });
-  } else {
-    await prisma.employee.update({
-      where: { id: user.id },
-      data: updateData,
-    });
-  }
+  const emailResult = await sendOTPEmail(user.email, otp, user.name);
 
-  //send OTP
-  const results = [];
-
-  if (method === "email" || method === "both") {
-    const emailResult = await sendOTPEmail(user.email, otp, user.name);
-    results.push({ type: "email", ...emailResult });
-  }
-
-  if (method === "sms" || method === "both") {
-    const mobile = userType === "admin" ? user.mobile : user.mobileNo;
-    const smsResult = await sendOTPSMS(mobile, otp, user.name);
-    results.push({ type: "sms", ...smsResult });
-  }
-
-  const hasSuccess = results.some((result) => result.success);
-
-  if (!hasSuccess) {
-    throw new ApiError(500, "Failed to send OTP via any method");
+  if (!emailResult.success) {
+    throw new ApiError(500, "Failed to send OTP via email");
   }
 
   return res.status(200).json(
-    new ApiResponse(
-      200,
-      {
-        userId: user.id,
-        userType,
-        otpSent: true,
-        deliveryMethods: results,
-        expiredIn: "5 Minutes",
-      },
-      "OTP sent successfully"
-    )
+    new ApiResponse(200, {
+      userId: user.id,
+      userType,
+      otpSent: true,
+      expiresIn: "5 minutes",
+    }, "OTP sent successfully")
   );
 });
 
+
 const verifyLoginOtp = asyncHandler(async (req, res) => {
-  const { userId, userType, otp } = req.body;
+  try {
+    const { userId, userType, otp } = req.body;
+    console.log("Extracted values:", { userId, userType, otp });
 
-  if (!userId || !userType || !otp) {
-    throw new ApiError(400, "User ID, user type, and OTP are required");
-  }
+    if (!userId || !userType || !otp) {
+      console.log("Missing required fields");
+      throw new ApiError(400, "User ID, user type, and OTP are required");
+    }
 
-  if (!isValidOTPFormat(otp)) {
-    throw new ApiError(400, "Invalid OTP format. OTP must be 6 digits.");
-  }
+    if (!isValidOTPFormat(otp)) {
+      console.log("Invalid OTP format");
+      throw new ApiError(400, "Invalid OTP format. OTP must be 6 digits.");
+    }
 
-  let user = null;
-  if (userType === "admin") {
-    user = await prisma.admin.findUnique({
-      where: { id: Number.parseInt(userId) },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        mobile: true,
-        companyId: true,
-        otp: true,
-        otpExpiry: true,
-        isOtpVerified: true,
-        otpAttemps: true,
-        company: {
-          select: {
-            id: true,
-            name: true,
-            industry: true,
+    let user = null;
+    if (userType === "admin") {
+      console.log("Querying admin...");
+      user = await prisma.admin.findUnique({
+        where: { id: Number.parseInt(userId) },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          mobile: true,
+          companyId: true,
+          otp: true,
+          otpExpiry: true,
+          isOtpVerified: true,
+          otpAttemps: true,
+          company: {
+            select: {
+              id: true,
+              name: true,
+              industry: true,
+            },
           },
         },
-      },
-    });
-  } else {
-    user = await prisma.employee.findUnique({
-      where: { id: Number.parseInt(userId) },
-      select: {
-        id: true,
-        employeeCode: true,
-        name: true,
-        email: true,
-        mobileNo: true,
-        role: true,
-        type: true,
-        companyId: true,
-        isActive: true,
-        otp: true,
-        otpExpiry: true,
-        isOtpVerified: true,
-        otpAttemps: true,
-        company: {
-          select: {
-            id: true,
-            name: true,
-            industry: true,
+      });
+    } else {
+      user = await prisma.employee.findUnique({
+        where: { id: Number.parseInt(userId) },
+        select: {
+          id: true,
+          employeeCode: true,
+          name: true,
+          email: true,
+          mobileNo: true,
+          role: true,
+          type: true,
+          companyId: true,
+          isActive: true,
+          otp: true,
+          otpExpiry: true,
+          isOtpVerified: true,
+          otpAttemps: true,
+          company: {
+            select: {
+              id: true,
+              name: true,
+              industry: true,
+            },
+          },
+          department: {
+            select: { name: true },
+          },
+          designation: {
+            select: { name: true },
           },
         },
-        department: {
-          select: { name: true },
-        },
-        designation: {
-          select: { name: true },
-        },
-      },
-    });
-  }
+      });
+    }
 
-  if (!user) {
-    throw new ApiError(404, "User not found");
-  }
+    if (!user) {
+      console.log("User not found");
+      throw new ApiError(404, "User not found");
+    }
 
-  if (userType === "employee" && !user.isActive) {
-    throw new ApiError(403, "Employee account is inactive");
-  }
+    if (userType === "employee" && !user.isActive) {
+      console.log("Employee inactive");
+      throw new ApiError(403, "Employee account is inactive");
+    }
 
-  if (!user.otp || !user.otpExpiry) {
-    throw new ApiError(400, "No OTP found. Please request a new OTP.");
-  }
+    if (user.otpBlockedUntil && new Date() < new Date(user.otpBlockedUntil)) {
+      throw new ApiError(
+        429,
+        "Too many failed attempts. Please try again after 1 hour."
+      );
+    }
 
-  if (isOTPExpired(user.otpExpiry)) {
-    throw new ApiError(400, "OTP has expired. Please request a new OTP.");
-  }
+    if (!user.otp || !user.otpExpiry) {
+      console.log("No OTP found");
+      throw new ApiError(400, "No OTP found. Please request a new OTP.");
+    }
 
-  if (user.otp !== otp) {
-    const updateData = { otpAttemps: user.otpAttemps + 1 };
+    if (isOTPExpired(user.otpExpiry)) {
+      console.log("OTP expired");
+      throw new ApiError(400, "OTP has expired. Please request a new OTP.");
+    }
+
+    if (user.otp !== otp) {
+      const updateData = { otpAttemps: user.otpAttemps + 1 };
+
+      if (updateData.otpAttemps >= 5) {
+        updateData.otpBlockedUntil = new Date(Date.now() + 60 * 60 * 1000);
+      }
+
+      if (userType === "admin") {
+        console.log("About to update admin attempts...");
+        console.log("prisma.admin.update type:", typeof prisma.admin.update);
+
+        const result = await prisma.admin.update({
+          where: { id: user.id },
+          data: updateData,
+        });
+      } else {
+        const result = await prisma.employee.update({
+          where: { id: user.id },
+          data: updateData,
+        });
+      }
+
+      throw new ApiError(400, "Invalid OTP");
+    }
+
+    const { accessToken, refreshToken } = await generateTokens(user, userType);
+    await updateRefreshToken(user.id, refreshToken, userType);
+
+    const clearOTPData = {
+      otp: null,
+      otpExpiry: null,
+      isOtpVerified: true,
+      otpAttemps: 0,
+      otpBlockedUntil: null,
+    };
 
     if (userType === "admin") {
       await prisma.admin.update({
         where: { id: user.id },
-        data: updateData,
+        data: clearOTPData,
       });
     } else {
       await prisma.employee.update({
         where: { id: user.id },
-        data: updateData,
+        data: clearOTPData,
       });
     }
 
-    throw new ApiError(400, "Invalid OTP");
+    const {
+      otp: _,
+      otpExpiry: __,
+      isOtpVerified: ___,
+      otpAttemps: ____,
+      ...userWithoutOTP
+    } = user;
+
+    const cookieOptions = getCookieOptions();
+
+    console.log("Sending successful response...");
+    return res
+      .status(200)
+      .cookie("accessToken", accessToken, cookieOptions)
+      .cookie("refreshToken", refreshToken, cookieOptions)
+      .json(
+        new ApiResponse(
+          200,
+          {
+            user: userWithoutOTP,
+            userType,
+            accessToken,
+            refreshToken,
+          },
+          `${userType === "employee" ? "Employee" : "Admin"} logged in successfully`
+        )
+      );
+  } catch (error) {
+    throw error;
   }
-
-  const { accessToken, refreshToken } = await generateTokens(user, userType);
-  await updateRefreshToken(user.id, refreshToken, userType);
-
-  const clearOTPData = {
-    otp: null,
-    otpExpiry: null,
-    isOtpVerified: true,
-    otpAttemps: 0,
-  };
-
-  if (userType === "admin") {
-    await prisma.admin.update({
-      where: { id: user.id },
-      data: clearOTPData,
-    });
-  } else {
-    await prisma.employee.update({
-      where: { id: user.id },
-      data: clearOTPData,
-    });
-  }
-
-  const {
-    otp: _,
-    otpExpiry: __,
-    isOtpVerified: ___,
-    otpAttempts: ____,
-    ...userWithoutOTP
-  } = user;
-  const cookieOptions = getCookieOptions();
-
-  return res
-    .status(200)
-    .cookie("accessToken", accessToken, cookieOptions)
-    .cookie("refreshToken", refreshToken, cookieOptions)
-    .json(
-      new ApiResponse(
-        200,
-        {
-          user: userWithoutOTP,
-          userType,
-          accessToken,
-          refreshToken,
-        },
-        `${userType === "employee" ? "Employee" : "Admin"} logged in successfully`
-      )
-    );
 });
 
 const resendOTP = asyncHandler(async (req, res) => {
@@ -290,31 +285,20 @@ const resendOTP = asyncHandler(async (req, res) => {
     throw new ApiError(400, "User ID and user type are required");
   }
 
+  if (method !== "email") {
+    throw new ApiError(400, "Only email delivery method is supported");
+  }
+
   let user = null;
   if (userType === "admin") {
     user = await prisma.admin.findUnique({
       where: { id: Number.parseInt(userId) },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        mobile: true,
-        otpExpiry: true,
-        otpAttempts: true,
-      },
+      select: { id: true, name: true, email: true, otpExpiry: true, otpAttemps: true, otpBlockedUntil: true },
     });
   } else {
     user = await prisma.employee.findUnique({
       where: { id: Number.parseInt(userId) },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        mobileNo: true,
-        otpExpiry: true,
-        otpAttempts: true,
-        isActive: true,
-      },
+      select: { id: true, name: true, email: true, otpExpiry: true, otpAttemps: true, isActive: true, otpBlockedUntil: true },
     });
   }
 
@@ -326,68 +310,51 @@ const resendOTP = asyncHandler(async (req, res) => {
     throw new ApiError(403, "Employee account is inactive");
   }
 
-  if (
-    user.otpExpiry &&
-    new Date() < new Date(user.otpExpiry.getTime() - 4 * 60 * 1000)
-  ) {
-    throw new ApiError(429, "Please wait before requesting a new OTP");
+  if (user.otpBlockedUntil && new Date() < new Date(user.otpBlockedUntil)) {
+    throw new ApiError(429, "Too many OTP requests. Please try again after 1 hour.");
   }
 
-  if (user.otpAttemps >= 5) {
-    throw new ApiError(
-      429,
-      "Too many OTP requests. Please try again after 1 hour."
-    );
+  if (user.otpBlockedUntil && new Date() >= new Date(user.otpBlockedUntil)) {
+    await prisma[userType].update({
+      where: { id: user.id },
+      data: { otpAttemps: 0, otpBlockedUntil: null },
+    });
+    user.otpAttemps = 0;
+    user.otpBlockedUntil = null;
+  }
+
+  if (user.otpExpiry && new Date() < new Date(user.otpExpiry.getTime() - 4 * 60 * 1000)) {
+    throw new ApiError(429, "Please wait before requesting a new OTP");
   }
 
   const otp = generateOTP();
   const otpExpiry = generateOTPExpiry();
 
-  const updateData = {
-    otp,
-    otpExpiry,
-    isOtpVerified: false,
-    otpAttemps: user.otpAttemps + 1,
-  };
+  await prisma[userType].update({
+    where: { id: user.id },
+    data: {
+      otp,
+      otpExpiry,
+      isOtpVerified: false,
+      otpAttemps: user.otpAttemps + 1,
+    },
+  });
 
-  if (userType === "admin") {
-    await prisma.admin.update({
-      where: { id: user.id },
-      data: updateData,
-    });
-  } else {
-    await prisma.employee.update({
-      where: { id: user.id },
-      data: updateData,
-    });
-  }
+  const emailResult = await sendOTPEmail(user.email, otp, user.name);
 
-  const results = [];
-
-  if (method === "email" || method === "both") {
-    const emailResult = await sendOTPEmail(user.email, otp, user.name);
-    results.push({ type: "email", ...emailResult });
-  }
-
-  if (method === "sms" || method === "both") {
-    const mobile = userType === "admin" ? user.mobile : user.mobileNo;
-    const smsResult = await sendOTPSMS(mobile, otp, user.name);
-    results.push({ type: "sms", ...smsResult });
+  if (!emailResult.success) {
+    throw new ApiError(500, "Failed to send OTP via email");
   }
 
   return res.status(200).json(
-    new ApiResponse(
-      200,
-      {
-        userId: user.id,
-        userType,
-        otpSent: true,
-        deliveryMethods: results,
-        expiresIn: "5 minutes",
-      },
-      "New OTP sent successfully"
-    )
+    new ApiResponse(200, {
+      userId: user.id,
+      userType,
+      otpSent: true,
+      expiresIn: "5 minutes",
+    }, "New OTP sent successfully")
   );
 });
+
 
 export { sendLoginOTP, verifyLoginOtp, resendOTP };

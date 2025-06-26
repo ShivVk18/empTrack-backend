@@ -2,31 +2,44 @@ import nodemailer from  'nodemailer'
 
 
 const createTransporter = () => {
-    if ( (process.env.NODE_ENV) === 'production' ) {
-         return nodemailer.createTransport({
-            service:'gmail',
-            secure:false,
-            auth:{
-                 user:process.env.EMAIL_USER,
-                 pass:process.env.EMAIL_PASSWORD
-            }
-         })
-    }else{
-          return nodemailer.createTransport({
-            service:'smtp.ethereal.email',
-            port:587,
-            auth:{
-                user:process.env.EMAIL_USER,
-                pass:process.env.EMAIL_PASSWORD
-            }
-          })
-    }
-}
+    return nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASSWORD
+        }
+    });
+};
 
 const transporter = createTransporter()
 
 
 const emailTemplates = {
+   otpLogin: (data) => ({
+    subject: "Your Login OTP - EmpTrack",
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333; text-align: center;">EmpTrack Login Verification</h2>
+        <p>Dear ${data.employeeName},</p>
+        <p>Your One-Time Password (OTP) for login verification is:</p>
+        <div style="background: #f8f9fa; border: 2px solid #007bff; border-radius: 8px; padding: 20px; text-align: center; margin: 20px 0;">
+          <h1 style="color: #007bff; font-size: 32px; margin: 0; letter-spacing: 5px;">${data.otp}</h1>
+        </div>
+        <p><strong>Important:</strong></p>
+        <ul>
+          <li>This OTP is valid for <strong>5 minutes</strong> only</li>
+          <li>Do not share this OTP with anyone</li>
+          <li>If you didn't request this login, please contact your administrator</li>
+        </ul>
+        <p>Best regards,<br>EmpTrack Security Team</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+        <p style="font-size: 12px; color: #666; text-align: center;">
+          This is an automated message. Please do not reply to this email.
+        </p>
+      </div>
+    `
+  }) ,
+
       welcome: (employeeName, companyName, loginCredentials) => ({
     subject: `Welcome to ${companyName} - Your Account Details`,
     html: `

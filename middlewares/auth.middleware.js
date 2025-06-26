@@ -46,6 +46,10 @@ const findUserById = async (userId, userType) => {
 }
 
 const authenticate = asyncHandler(async (req, res, next) => {
+
+   console.log("=== AUTHENTICATE MIDDLEWARE CALLED ===");
+  console.log("Route:", req.path);
+  
   const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "")
 
   const decodedToken = await verifyToken(token)

@@ -4,7 +4,8 @@ import {
   ensureCompanyAccess,
   ensureSelfOrManagerialAccess,
   requireManagerialRole,
-  requirePermission,
+  requireSeniorRole,
+  requirePermission
 } from "../../middlewares/auth.middleware.js";
 import {
   deleteEmployee,

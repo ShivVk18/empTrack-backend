@@ -19,7 +19,7 @@ const generateTokens = async(user,userType = 'user') =>{
      }
 }
 
-validatePassword = async (plainPassword,hashedPassword) =>{
+const validatePassword = async (plainPassword,hashedPassword) =>{
      return await bcrypt.compare(plainPassword,hashedPassword)
 }
 
@@ -27,25 +27,37 @@ const hashPassword = async (password ,rounds=10) =>{
     return await bcrypt.hash(password,rounds)
 }
 
-const updateRefreshToken = async(userId,refreshToken,userType) => {
-     const table = userType === "employee" ? "employee" : "user"
 
-     if(table === "employee"){
-         await prisma.employee.update({
-             where:{id:userId},
-             data:{
-                refreshToken:refreshToken
-             }
-         })
-     }else{
-         await prisma.user.update({
-               where:{id:userId},
-               data:{
-                refreshToken:refreshToken
-               }
-         })
-     }
-}
+const updateRefreshToken = async (userId, refreshToken, userType) => {
+  console.log('updateRefreshToken called with:', { userId, userType, refreshToken: !!refreshToken });
+  
+  try {
+    if (userType === "employee") {
+      console.log('Updating employee refresh token...');
+      await prisma.employee.update({
+        where: { id: userId },
+        data: {
+          refreshToken: refreshToken
+        }
+      });
+    } else if (userType === "admin") { // Changed from "user" to "admin"
+      console.log('Updating admin refresh token...');
+      await prisma.admin.update({ // Changed from prisma.user to prisma.admin
+        where: { id: userId },
+        data: {
+          refreshToken: refreshToken
+        }
+      });
+    } else {
+      throw new Error(`Invalid userType: ${userType}. Expected 'admin' or 'employee'.`);
+    }
+    console.log('Refresh token updated successfully');
+  } catch (error) {
+    console.error('Error updating refresh token:', error);
+    throw error;
+  }
+};
+
 
 const clearRefreshToken = async (userId ,userType) =>{  
 

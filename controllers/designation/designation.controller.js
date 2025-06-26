@@ -5,40 +5,49 @@ import { ApiResponse } from "../../utils/ApiResponse.js";
 import { hasPermission } from "../../middlewares/auth.middleware.js";
 
 const addDesignation = asyncHandler(async (req, res) => {
-  const { designationName, designationCode, description, level } = req.body;
+  const { designationName, designationCode, description, level, departmentName } = req.body;
   const companyId = req.user?.companyId;
   const currentUser = req.user;
   const userType = req.userType;
 
-  if (!designationName || !designationCode) {
-    throw new ApiError(400, "Designation name and code are required");
+  if (!designationName || !designationCode || !departmentName) {
+    throw new ApiError(400, "Designation name, code and department name are required");
   }
 
   if (!hasPermission(currentUser.role, userType, "designation:manage")) {
     throw new ApiError(403, "Insufficient permissions to create designations");
   }
 
+  const department = await prisma.department.findFirst({
+    where: {
+      name: departmentName,
+      companyId,
+    },
+  });
+
+  if (!department) {
+    throw new ApiError(404, "Department not found");
+  }
+
   const existingDesignation = await prisma.designation.findFirst({
     where: {
-      companyId: companyId,
+      companyId,
       OR: [{ name: designationName }, { code: designationCode }],
     },
   });
 
   if (existingDesignation) {
-    throw new ApiError(
-      400,
-      "Designation with this name or code already exists"
-    );
+    throw new ApiError(400, "Designation with this name or code already exists");
   }
 
   const designation = await prisma.designation.create({
     data: {
       name: designationName,
       code: designationCode,
-      description: description,
+      description: description || null,
       level: level || null,
-      companyId: companyId,
+      departmentId: department.id,
+      companyId,
     },
   });
 
@@ -47,15 +56,10 @@ const addDesignation = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, designation, "Designation added successfully"));
 });
 
-const getAllDesignations = asyncHandler(async (req, res) => {
+
+const getAllDesignationsByDepartment = asyncHandler(async (req, res) => {
   const companyId = req.user?.companyId;
-  const {
-    includeStats = false,
-    page,
-    limit,
-    sortBy = "name",
-    sortOrder = "asc",
-  } = req.query;
+  const departmentId = Number.parseInt(req.query?.departmentId);
   const currentUser = req.user;
   const userType = req.userType;
 
@@ -63,49 +67,23 @@ const getAllDesignations = asyncHandler(async (req, res) => {
     throw new ApiError(403, "Insufficient permissions to view designations");
   }
 
-  const queryOptions = {
-    where: { companyId },
-    orderBy: { [sortBy]: sortOrder },
-  };
-
-  if (page && limit) {
-    const skip = (Number.parseInt(page) - 1) * Number.parseInt(limit);
-    const take = Number.parseInt(limit);
-    queryOptions.skip = skip;
-    queryOptions.take = take;
+  if (!departmentId) {
+    throw new ApiError(400, "departmentId is required in query");
   }
 
-  if (includeStats === "true") {
-    queryOptions.include = {
-      _count: {
-        select: {
-          employees: true,
-          payParameters: true,
-        },
-      },
-    };
-  }
-
-  const [designations, totalCount] = await Promise.all([
-    prisma.designation.findMany(queryOptions),
-    page && limit ? prisma.designation.count({ where: { companyId } }) : null,
-  ]);
-
-  const response = { designations };
-
-  if (page && limit) {
-    response.pagination = {
-      currentPage: Number.parseInt(page),
-      totalPages: Math.ceil(totalCount / Number.parseInt(limit)),
-      totalCount,
-      hasNext: Number.parseInt(page) * Number.parseInt(limit) < totalCount,
-      hasPrev: Number.parseInt(page) > 1,
-    };
-  }
+  const designations = await prisma.designation.findMany({
+    where: {
+      companyId,
+      departmentId,
+    },
+    orderBy: {
+      name: "asc",
+    },
+  });
 
   return res
     .status(200)
-    .json(new ApiResponse(200, response, "Designations fetched successfully"));
+    .json(new ApiResponse(200, designations, "Designations fetched successfully"));
 });
 
 const getDesignationById = asyncHandler(async (req, res) => {
@@ -287,7 +265,7 @@ const deleteDesignation = asyncHandler(async (req, res) => {
 
 export {
   addDesignation,
-  getAllDesignations,
+  getAllDesignationsByDepartment,
   getDesignationById,
   updateDesignation,
   deleteDesignation,

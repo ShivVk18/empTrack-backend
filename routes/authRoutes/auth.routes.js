@@ -23,6 +23,16 @@ import { upload } from "../../middlewares/multer.middleware.js";
 
 const router = express.Router();
 
+const publicRoutes = [
+  "/admin/signup",
+  "/login", 
+  "/otp/send",
+  "/otp/verify",
+  "/otp/resend"
+];
+
+
+
 router.post("/admin/signup", adminSignUp);
 router.post("/login", universalLogin);
 router.post("/otp/send", sendLoginOTP);
@@ -39,7 +49,7 @@ router.post(
   requirePermission("employee:manage"),
   upload.single("profilePic"),
   addEmployee
-);
+); 
 
 router.get("/profile", getProfile);
 
