@@ -30,7 +30,6 @@ const getAllEmployees = asyncHandler(async (req, res) => {
 
   const whereClause = { companyId: companyId };
 
- 
   if (currentUser.role === "MANAGER" && userType === "employee") {
     whereClause.departmentId = currentUser.departmentId;
   }
@@ -80,7 +79,6 @@ const getAllEmployees = asyncHandler(async (req, res) => {
   const take = Number.parseInt(limit);
   const orderBy = { [sortBy]: sortOrder };
 
-  
   const canViewSalary = hasPermission(
     currentUser.role,
     userType,
@@ -142,7 +140,6 @@ const getEmployeeById = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Employee ID is required");
   }
 
-  
   if (
     userType === "employee" &&
     currentUser.id !== Number.parseInt(employeeId)
@@ -152,7 +149,6 @@ const getEmployeeById = asyncHandler(async (req, res) => {
       throw new ApiError(403, "Can only access your own profile");
     }
 
-    
     if (currentUser.role === "MANAGER") {
       const targetEmployee = await prisma.employee.findFirst({
         where: { id: Number.parseInt(employeeId), companyId },
@@ -213,41 +209,42 @@ const getEmployeeById = asyncHandler(async (req, res) => {
     );
 });
 
-const updateEmployee = asyncHandler(async (req, res) => {
+const updateBasicDetails = asyncHandler(async (req, res) => {
   const employeeId = Number.parseInt(req.params?.id);
+  const {
+    name,
+    email,
+    mobileNo,
+    gender,
+    dob,
+    address1,
+    address2,
+    accountNo,
+    pfAccountNo,
+  } = req.body;
   const currentUser = req.user;
   const userType = req.userType;
-  const updateData = req.body;
 
-  if (!employeeId) {
-    throw new ApiError(400, "Employee ID is required");
-  }
+  if (!employeeId) throw new ApiError(400, "Employee ID is required");
 
   const existingEmployee = await prisma.employee.findUnique({
     where: { id: employeeId },
     select: {
       id: true,
-      role: true,
-      companyId: true,
       email: true,
+      mobileNo: true,
       departmentId: true,
-      salary: true,
+      companyId: true,
     },
   });
 
-  if (!existingEmployee) {
-    throw new ApiError(404, "Employee not found");
-  }
+  if (!existingEmployee) throw new ApiError(404, "Employee not found");
 
- 
   if (userType === "employee" && currentUser.id !== employeeId) {
     const managerialRoles = ["HR", "MANAGER", "ACCOUNTANT", "SR_MANAGER"];
-
     if (!managerialRoles.includes(currentUser.role)) {
       throw new ApiError(403, "Can only update your own profile");
     }
-
-
     if (
       currentUser.role === "MANAGER" &&
       existingEmployee.departmentId !== currentUser.departmentId
@@ -256,120 +253,56 @@ const updateEmployee = asyncHandler(async (req, res) => {
     }
   }
 
- 
-  if (updateData.role && updateData.role !== existingEmployee.role) {
-    if (!hasPermission(currentUser.role, userType, "employee:manage")) {
-      throw new ApiError(
-        403,
-        "Insufficient permissions to change employee role"
-      );
-    }
-
-    if (currentUser.role === "HR" && updateData.role === "SR_MANAGER") {
-      throw new ApiError(403, "HR cannot assign Senior Manager role");
-    }
-  }
-
-
-  if (
-    updateData.salary &&
-    !hasPermission(currentUser.role, userType, "payroll:manage")
-  ) {
-    throw new ApiError(403, "Insufficient permissions to update salary");
-  }
-
-  const allowedFields = [
-    "name",
-    "email",
-    "mobileNo",
-    "salary",
-    "gender",
-    "dob",
-    "address1",
-    "address2",
-    "type",
-    "role",
-    "accountNo",
-    "pfAccountNo",
-    "isActive",
-  ];
-
-  const filteredUpdateData = {};
-
-  allowedFields.forEach((field) => {
-    if (updateData[field] !== undefined) {
-      
-      if (userType === "employee" && currentUser.id === employeeId) {
-        const selfUpdateFields = [
-          "name",
-          "email",
-          "mobileNo",
-          "address1",
-          "address2",
-          "accountNo",
-          "pfAccountNo",
-        ];
-        if (selfUpdateFields.includes(field)) {
-          filteredUpdateData[field] = updateData[field];
-        }
-      } else {
-        filteredUpdateData[field] = updateData[field];
-      }
-    }
-  });
-
-  if (filteredUpdateData.salary) {
-    filteredUpdateData.salary = Number.parseFloat(filteredUpdateData.salary);
-    if (filteredUpdateData.salary <= 0) {
-      throw new ApiError(400, "Salary must be greater than 0");
-    }
-  }
-
-  if (filteredUpdateData.dob) {
-    filteredUpdateData.dob = new Date(filteredUpdateData.dob);
-  }
-
-  if (
-    filteredUpdateData.email &&
-    filteredUpdateData.email !== existingEmployee.email
-  ) {
+  if (email && email !== existingEmployee.email) {
     const emailExists = await prisma.employee.findFirst({
       where: {
-        email: filteredUpdateData.email,
+        email,
         id: { not: employeeId },
         companyId: currentUser.companyId,
       },
     });
-
-    if (emailExists) {
+    if (emailExists)
       throw new ApiError(400, "Email is already in use by another employee");
-    }
   }
 
-  if (filteredUpdateData.mobileNo) {
+  if (mobileNo && mobileNo !== existingEmployee.mobileNo) {
     const mobileExists = await prisma.employee.findFirst({
       where: {
-        mobileNo: filteredUpdateData.mobileNo,
+        mobileNo,
         id: { not: employeeId },
         companyId: currentUser.companyId,
       },
     });
-
-    if (mobileExists) {
+    if (mobileExists)
       throw new ApiError(
         400,
         "Mobile number is already in use by another employee"
       );
-    }
   }
 
-  if (Object.keys(filteredUpdateData).length === 0) {
+  const updateData = {
+    name,
+    email,
+    mobileNo,
+    gender,
+    dob: dob ? new Date(dob) : undefined,
+    address1,
+    address2,
+    accountNo,
+    pfAccountNo,
+  };
+
+  Object.keys(updateData).forEach(
+    (key) => updateData[key] === undefined && delete updateData[key]
+  );
+
+  if (Object.keys(updateData).length === 0) {
     throw new ApiError(400, "No valid fields to update");
   }
 
   const updatedEmployee = await prisma.employee.update({
     where: { id: employeeId },
-    data: filteredUpdateData,
+    data: updateData,
     include: {
       department: { select: { name: true } },
       designation: { select: { name: true } },
@@ -379,8 +312,95 @@ const updateEmployee = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .json(
-      new ApiResponse(200, updatedEmployee, "Employee updated successfully")
+      new ApiResponse(
+        200,
+        updatedEmployee,
+        "Basic details updated successfully"
+      )
     );
+});
+
+const updateSalary = asyncHandler(async (req, res) => {
+  const employeeId = Number.parseInt(req.params?.id);
+  const { salary } = req.body;
+  const currentUser = req.user;
+  const userType = req.userType;
+
+  if (!employeeId) throw new ApiError(400, "Employee ID is required");
+  if (!hasPermission(currentUser.role, userType, "employee:update:salary")) {
+    throw new ApiError(403, "Insufficient permissions to update salary");
+  }
+
+  const existingEmployee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+    select: { id: true, salary: true },
+  });
+
+  if (!existingEmployee) throw new ApiError(404, "Employee not found");
+
+  const numericSalary = Number.parseFloat(salary);
+  if (isNaN(numericSalary) || numericSalary <= 0) {
+    throw new ApiError(400, "Salary must be a valid number greater than 0");
+  }
+
+  const updatedEmployee = await prisma.employee.update({
+    where: { id: employeeId },
+    data: { salary: numericSalary },
+    select: { id: true, name: true, salary: true },
+  });
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, updatedEmployee, "Salary updated successfully"));
+});
+
+
+const updateRole = asyncHandler(async (req, res) => {
+  const employeeId = Number.parseInt(req.params?.id);
+  const { role } = req.body;
+  const currentUser = req.user;
+  const userType = req.userType;
+
+  if (!employeeId) throw new ApiError(400, "Employee ID is required");
+  if (!role) throw new ApiError(400, "New role is required");
+
+  if (!hasPermission(currentUser.role, userType, "employee:manage")) {
+    throw new ApiError(403, "Insufficient permissions to change role");
+  }
+
+  const existingEmployee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+    select: { id: true, role: true },
+  });
+
+  if (!existingEmployee) throw new ApiError(404, "Employee not found");
+
+ 
+  const allowedRoles = ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "HR", "SR_MANAGER"];
+
+  if (!allowedRoles.includes(role)) {
+    throw new ApiError(400, "Invalid role provided");
+  }
+
+  
+  if ((role === "SR_MANAGER" || role === "HR") && userType !== "admin") {
+    throw new ApiError(403, "Only Admin can assign Senior Manager or HR role");
+  }
+
+ 
+  if (existingEmployee.role === "HR" && userType !== "admin") {
+    throw new ApiError(403, "Only Admin can modify an existing HR's role");
+  }
+
+  const updatedEmployee = await prisma.employee.update({
+    where: { id: employeeId },
+    data: { role },
+    select: { id: true, name: true, role: true },
+  });
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, updatedEmployee, "Role updated successfully"));
 });
 
 const deleteEmployee = asyncHandler(async (req, res) => {
@@ -407,17 +427,14 @@ const deleteEmployee = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Employee not found");
   }
 
-
   if (!hasPermission(currentUser.role, userType, "employee:manage")) {
     throw new ApiError(403, "Insufficient permissions to delete employee");
   }
 
-  
   if (currentUser.role === "HR" && existingEmployee.role === "SR_MANAGER") {
     throw new ApiError(403, "HR cannot delete Senior Manager");
   }
 
- 
   const payrollRecords = await prisma.payMaster.count({
     where: { employeeId },
   });
@@ -445,7 +462,6 @@ const updateProfilePic = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Employee id is required");
   }
 
- 
   if (userType === "employee" && currentUser.id !== employeeId) {
     const managerialRoles = ["HR", "MANAGER", "ACCOUNTANT", "SR_MANAGER"];
     if (!managerialRoles.includes(currentUser.role)) {
@@ -506,7 +522,6 @@ const getEmployeeStats = asyncHandler(async (req, res) => {
   const currentUser = req.user;
   const userType = req.userType;
 
-
   if (!hasPermission(currentUser.role, userType, "employee:read")) {
     throw new ApiError(
       403,
@@ -552,7 +567,6 @@ const getEmployeeStats = asyncHandler(async (req, res) => {
     }),
   ]);
 
-  
   const departmentIds = departmentStats
     .map((stat) => stat.departmentId)
     .filter(Boolean);
@@ -568,7 +582,6 @@ const getEmployeeStats = asyncHandler(async (req, res) => {
     count: stat._count.departmentId,
   }));
 
- 
   let salaryOverview = null;
   if (hasPermission(currentUser.role, userType, "payroll:read")) {
     const salaryData = await prisma.employee.aggregate({
@@ -627,8 +640,10 @@ const getEmployeeStats = asyncHandler(async (req, res) => {
 export {
   getAllEmployees,
   getEmployeeById,
-  updateEmployee,
   deleteEmployee,
   updateProfilePic,
   getEmployeeStats,
+  updateBasicDetails,
+  updateSalary,
+  updateRole,
 };

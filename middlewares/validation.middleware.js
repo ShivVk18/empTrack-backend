@@ -1,8 +1,6 @@
 import { ApiError } from "../utils/ApiError.js"
 
 
-
-
 const validate = (schema, property = "body") => {
   return (req, res, next) => {
     const { error, value } = schema.validate(req[property], {

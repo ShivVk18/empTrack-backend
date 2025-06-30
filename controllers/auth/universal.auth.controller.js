@@ -15,6 +15,9 @@ import { hasPermission } from "../../middlewares/auth.middleware.js";
 import jwt from "jsonwebtoken";
 import { sendWelcomeEmail } from "../email/email.controller.js";
 
+
+
+
 const adminSignUp = asyncHandler(async (req, res) => {
   const {
     adminName,
@@ -127,6 +130,31 @@ const adminSignUp = asyncHandler(async (req, res) => {
     );
 });
 
+
+const uniqueCompanyName = asyncHandler(async (req, res) => {
+  const { companyName } = req.query;
+
+  if (!companyName?.trim()) {
+    throw new ApiError(400, "Company Name is required");
+  }
+
+  const existingCompany = await prisma.company.findUnique({
+    where: {
+      name: companyName,
+    },
+  });
+
+  if (existingCompany) {
+    throw new ApiError(409, "Company Name already exists");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "The company name is unique"));
+});
+
+
+
 const addEmployee = asyncHandler(async (req, res) => {
   const {
     employeeCode,
@@ -185,7 +213,7 @@ const addEmployee = asyncHandler(async (req, res) => {
     ) {
       throw new ApiError(
         403,
-        "Insufficient permissions to assign administrative roles"
+        "You don't have permission to assign this role. Please contact an Admin."
       );
     }
 
@@ -480,7 +508,7 @@ const getProfile = asyncHandler(async (req, res) => {
         name: true,
         email: true,
         mobileNo: true,
-        salary: hasPermission(req.user.role, userType, "payroll:read"),
+        salary: hasPermission(req.user.role, userType, "payroll:read") ? true:false,
         gender: true,
         dob: true,
         address1: true,

@@ -16,43 +16,59 @@ const verifyToken = async (token) => {
 }
 
 const findUserById = async (userId, userType) => {
-  if (userType === "employee") {
-    return await prisma.employee.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        employeeCode: true,
-        role: true,
-        companyId: true,
-        mobileNo: true,
-        isActive: true,
-        departmentId: true,
-      },
-    })
-  } else if (userType === "admin") {
-    return await prisma.admin.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        companyId: true,
-        mobile: true,
-      },
-    })
+  try {
+    if (userType === "employee") {
+      const employee = await prisma.employee.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          employeeCode: true,
+          role: true,
+          companyId: true,
+          mobileNo: true,
+          isActive: true,
+          departmentId: true,
+          leftAt: true, 
+        },
+      })
+      
+   
+      if (employee && employee.leftAt) {
+        throw new ApiError(403, "Employee account is no longer active")
+      }
+      
+      return employee
+    } else if (userType === "admin") {
+      return await prisma.admin.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          companyId: true,
+          mobile: true,
+        },
+      })
+    }
+    
+    return null
+  } catch (error) {
+    if (error instanceof ApiError) throw error
+    throw new ApiError(500, "Database error while fetching user")
   }
 }
 
 const authenticate = asyncHandler(async (req, res, next) => {
-
-   console.log("=== AUTHENTICATE MIDDLEWARE CALLED ===");
-  console.log("Route:", req.path);
-  
   const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "")
 
   const decodedToken = await verifyToken(token)
+   
+  if (!decodedToken._id || !decodedToken.userType) {
+    throw new ApiError(401, "Invalid token structure")
+  }
+
 
   const user = await findUserById(decodedToken._id, decodedToken.userType)
 
@@ -64,53 +80,110 @@ const authenticate = asyncHandler(async (req, res, next) => {
     throw new ApiError(403, "Employee account is inactive")
   }
 
+  if (!user.companyId) {
+    throw new ApiError(403, "User not associated with any company")
+  } 
+  
+  
   req.user = user
+
   req.userType = decodedToken.userType
+
+  
+
+
+console.log(`Authenticated UserType: ${req.userType}, Role: ${req.role}`);
   next()
 })
 
 
 const ROLE_PERMISSIONS = {
 
-  admin: ["*"], 
+  admin: ["*"],  
 
- 
+
   HR: [
-    "employee:manage", 
-    "department:manage", 
+    "employee:read",
+    "employee:manage",
+    "employee:update:basic",
+    "employee:update:salary",
+    "department:manage",
     "designation:manage",
-    "payroll:manage", 
-    "payparameter:manage", 
-    "analytics:read", 
+    "payroll:manage",
+    "payparameter:manage",
+    "analytics:read",
+
+    "attendance:manage",
+    "attendance:approve",
+    "attendancePlan:manage",
+    "attendancePlan:read",
+
+    "leavePolicy:manage",
+    "leavePolicy:read",
+    "leaveApplication:approve",
+    "leaveApplication:read",
+
+    "complain:manage",
+    "complain:read",
+
+    "holiday:manage",
+    "holiday:read",
+
+    "notification:manage",
+    "notification:read",
   ],
 
-  
+
   SR_MANAGER: [
     "employee:read",
-    "employee:update",
+    "employee:update:basic",
     "department:manage",
-    "designation:manage", 
+    "designation:manage",
     "payroll:read",
     "payroll:generate",
     "payparameter:read",
     "analytics:read",
+
+    "attendance:read",
+    "attendance:approve",
+    "attendancePlan:read",
+
+    "leavePolicy:read",
+    "leaveApplication:approve",
+    "leaveApplication:read",
+
+    "complain:read",
+    "holiday:read",
+    "notification:read",
   ],
 
-  
+
   MANAGER: [
-    "employee:read", 
-    "employee:update", 
+    "employee:read",
+    
     "department:read",
     "designation:read",
-    "payroll:read", 
+    "payroll:read",
     "payparameter:read",
+
+    "attendance:read",
+    "attendancePlan:read",
+
+    "leavePolicy:read",
+    "leaveApplication:read",
+
+    "complain:read",
+    "holiday:read",
+    "notification:read",
   ],
 
- 
+
   ACCOUNTANT: [
     "employee:read",
+    "employee:update:salary",
+
     "payroll:manage",
-    "payparameter:manage", 
+    "payparameter:manage",
     "analytics:read",
   ],
 
@@ -118,7 +191,21 @@ const ROLE_PERMISSIONS = {
   EMPLOYEE: [
     "profile:read",
     "profile:update",
-    "payroll:read:own", 
+    "payroll:read:own",
+
+    "attendance:read:own",
+    "attendance:clockin",
+    "attendance:clockout",
+
+    "leaveApplication:apply",
+    "leaveApplication:cancel",
+    "leaveApplication:read:own",
+
+    "complain:raise",
+    "complain:read:own",
+
+    "holiday:read",
+    "notification:read",
   ],
 }
 
@@ -188,6 +275,7 @@ const requireRole = (allowedRoles) => {
     next()
   })
 }
+
 
 const requireAdminAccess = asyncHandler(async (req, res, next) => {
   if (req.userType !== "admin") {

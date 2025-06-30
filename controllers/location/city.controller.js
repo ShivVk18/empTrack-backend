@@ -5,7 +5,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 
 export const getCitiesDropdown = asyncHandler(async (req, res) => {
   const { stateId } = req.params;
-
+  
   const parsedStateId = Number.parseInt(stateId);
   if (isNaN(parsedStateId)) {
     throw new ApiError(400, "Invalid State ID format");

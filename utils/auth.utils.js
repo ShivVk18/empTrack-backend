@@ -37,15 +37,17 @@ const updateRefreshToken = async (userId, refreshToken, userType) => {
       await prisma.employee.update({
         where: { id: userId },
         data: {
-          refreshToken: refreshToken
+          refreshToken: refreshToken,
+          
         }
       });
-    } else if (userType === "admin") { // Changed from "user" to "admin"
+    } else if (userType === "admin") { 
       console.log('Updating admin refresh token...');
-      await prisma.admin.update({ // Changed from prisma.user to prisma.admin
+      await prisma.admin.update({ 
         where: { id: userId },
         data: {
-          refreshToken: refreshToken
+          refreshToken: refreshToken,
+          
         }
       });
     } else {
@@ -59,11 +61,38 @@ const updateRefreshToken = async (userId, refreshToken, userType) => {
 };
 
 
-const clearRefreshToken = async (userId ,userType) =>{  
+const clearRefreshToken = async (userId, userType) => {
+  console.log('clearRefreshToken called with:', { userId, userType });
 
-    await updateRefreshToken(userId,null,userType)
-
-}
+  try {
+    if (userType === "employee") {
+      console.log('Updating employee refresh token...');
+      await prisma.employee.update({
+        where: { id: userId },
+        data: {
+          refreshToken: null,
+          isOtpVerified: false
+        }
+      });
+    } else if (userType === "admin") {
+      console.log('Updating admin refresh token...');
+      await prisma.admin.update({
+        where: { id: userId },
+        data: {
+          refreshToken: null,
+          isOtpVerified: false
+        }
+      });
+    } else {
+      throw new Error(`Invalid userType: ${userType}. Expected 'admin' or 'employee'.`);
+    }
+    
+    console.log('Refresh token cleared successfully');
+  } catch (error) {
+    console.error('Error clearing refresh token:', error);
+    throw error;
+  }
+};
 
 
 const getCookieOptions =  () => (

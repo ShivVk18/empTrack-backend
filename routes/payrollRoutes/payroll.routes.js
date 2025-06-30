@@ -32,10 +32,12 @@ router.post(
   requirePermission("payroll:manage"),
   generateSalary
 );
+
+
 router.get("/salaries", requirePermission("payroll:read"), getEmployeeSalaries);
 
 router.patch(
-  "/salary/payMasterId",
+  "/salary/:payMasterId",
   requireFinancialRole,
   requirePermission("payroll:manage"),
   updateSalary
@@ -52,7 +54,7 @@ router.get(
   getPayParameters
 );
 router.get(
-  "/paramaeter/:employeeType",
+  "/parameter/:employeeType",
   requirePermission("payparameter:read"),
   getPayParametersByType
 );
@@ -71,6 +73,7 @@ router.delete(
   requirePermission("payparameter:manage"),
   deletePayparameter
 );
+
 
 router.get(
   "/analytics/summary",

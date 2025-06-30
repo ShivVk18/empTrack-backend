@@ -8,7 +8,6 @@ import {
   generateOTP,
   isValidOTPFormat,
   generateOTPExpiry,
-  
   sendOTPEmail,
 } from "../../utils/otp.utils.js";
 
@@ -38,12 +37,12 @@ const sendLoginOTP = asyncHandler(async (req, res) => {
   if (userType === "admin") {
     user = await prisma.admin.findUnique({
       where: { id: Number.parseInt(userId) },
-      select: { id: true, name: true, email: true, otpAttemps: true, otpBlockedUntil: true },
+      select: { id: true, name: true, email: true, otpAttempts: true, otpBlockedUntil: true },
     });
   } else {
     user = await prisma.employee.findUnique({
       where: { id: Number.parseInt(userId) },
-      select: { id: true, name: true, email: true, otpAttemps: true, isActive: true, otpBlockedUntil: true },
+      select: { id: true, name: true, email: true, otpAttempts: true, isActive: true, otpBlockedUntil: true },
     });
   }
 
@@ -62,9 +61,9 @@ const sendLoginOTP = asyncHandler(async (req, res) => {
   if (user.otpBlockedUntil && new Date() >= new Date(user.otpBlockedUntil)) {
     await prisma[userType].update({
       where: { id: user.id },
-      data: { otpAttemps: 0, otpBlockedUntil: null },
+      data: { otpAttempts: 0, otpBlockedUntil: null },
     });
-    user.otpAttemps = 0;
+    user.otpAttempts = 0;
     user.otpBlockedUntil = null;
   }
 
@@ -77,7 +76,7 @@ const sendLoginOTP = asyncHandler(async (req, res) => {
       otp,
       otpExpiry,
       isOtpVerified: false,
-      otpAttemps: user.otpAttemps + 1,
+      otpAttempts: user.otpAttempts + 1,
     },
   });
 
@@ -96,7 +95,6 @@ const sendLoginOTP = asyncHandler(async (req, res) => {
     }, "OTP sent successfully")
   );
 });
-
 
 const verifyLoginOtp = asyncHandler(async (req, res) => {
   try {
@@ -127,7 +125,7 @@ const verifyLoginOtp = asyncHandler(async (req, res) => {
           otp: true,
           otpExpiry: true,
           isOtpVerified: true,
-          otpAttemps: true,
+          otpAttempts: true,
           company: {
             select: {
               id: true,
@@ -153,7 +151,7 @@ const verifyLoginOtp = asyncHandler(async (req, res) => {
           otp: true,
           otpExpiry: true,
           isOtpVerified: true,
-          otpAttemps: true,
+          otpAttempts: true,
           company: {
             select: {
               id: true,
@@ -182,10 +180,7 @@ const verifyLoginOtp = asyncHandler(async (req, res) => {
     }
 
     if (user.otpBlockedUntil && new Date() < new Date(user.otpBlockedUntil)) {
-      throw new ApiError(
-        429,
-        "Too many failed attempts. Please try again after 1 hour."
-      );
+      throw new ApiError(429, "Too many failed attempts. Please try again after 1 hour.");
     }
 
     if (!user.otp || !user.otpExpiry) {
@@ -199,22 +194,20 @@ const verifyLoginOtp = asyncHandler(async (req, res) => {
     }
 
     if (user.otp !== otp) {
-      const updateData = { otpAttemps: user.otpAttemps + 1 };
+      const updateData = { otpAttempts: user.otpAttempts + 1 };
 
-      if (updateData.otpAttemps >= 5) {
+      if (updateData.otpAttempts >= 5) {
         updateData.otpBlockedUntil = new Date(Date.now() + 60 * 60 * 1000);
       }
 
       if (userType === "admin") {
         console.log("About to update admin attempts...");
-        console.log("prisma.admin.update type:", typeof prisma.admin.update);
-
-        const result = await prisma.admin.update({
+        await prisma.admin.update({
           where: { id: user.id },
           data: updateData,
         });
       } else {
-        const result = await prisma.employee.update({
+        await prisma.employee.update({
           where: { id: user.id },
           data: updateData,
         });
@@ -230,7 +223,7 @@ const verifyLoginOtp = asyncHandler(async (req, res) => {
       otp: null,
       otpExpiry: null,
       isOtpVerified: true,
-      otpAttemps: 0,
+      otpAttempts: 0,
       otpBlockedUntil: null,
     };
 
@@ -250,7 +243,7 @@ const verifyLoginOtp = asyncHandler(async (req, res) => {
       otp: _,
       otpExpiry: __,
       isOtpVerified: ___,
-      otpAttemps: ____,
+      otpAttempts: ____,
       ...userWithoutOTP
     } = user;
 
@@ -293,12 +286,12 @@ const resendOTP = asyncHandler(async (req, res) => {
   if (userType === "admin") {
     user = await prisma.admin.findUnique({
       where: { id: Number.parseInt(userId) },
-      select: { id: true, name: true, email: true, otpExpiry: true, otpAttemps: true, otpBlockedUntil: true },
+      select: { id: true, name: true, email: true, otpExpiry: true, otpAttempts: true, otpBlockedUntil: true },
     });
   } else {
     user = await prisma.employee.findUnique({
       where: { id: Number.parseInt(userId) },
-      select: { id: true, name: true, email: true, otpExpiry: true, otpAttemps: true, isActive: true, otpBlockedUntil: true },
+      select: { id: true, name: true, email: true, otpExpiry: true, otpAttempts: true, isActive: true, otpBlockedUntil: true },
     });
   }
 
@@ -317,9 +310,9 @@ const resendOTP = asyncHandler(async (req, res) => {
   if (user.otpBlockedUntil && new Date() >= new Date(user.otpBlockedUntil)) {
     await prisma[userType].update({
       where: { id: user.id },
-      data: { otpAttemps: 0, otpBlockedUntil: null },
+      data: { otpAttempts: 0, otpBlockedUntil: null },
     });
-    user.otpAttemps = 0;
+    user.otpAttempts = 0;
     user.otpBlockedUntil = null;
   }
 
@@ -336,7 +329,7 @@ const resendOTP = asyncHandler(async (req, res) => {
       otp,
       otpExpiry,
       isOtpVerified: false,
-      otpAttemps: user.otpAttemps + 1,
+      otpAttempts: user.otpAttempts + 1,
     },
   });
 
@@ -355,6 +348,5 @@ const resendOTP = asyncHandler(async (req, res) => {
     }, "New OTP sent successfully")
   );
 });
-
 
 export { sendLoginOTP, verifyLoginOtp, resendOTP };

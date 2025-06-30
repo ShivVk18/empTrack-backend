@@ -12,8 +12,9 @@ import {
   getAllEmployees,
   getEmployeeById,
   getEmployeeStats,
-  updateEmployee,
+ 
   updateProfilePic,
+  updateBasicDetails, updateSalary, updateRole
 } from "../../controllers/employee/employee.management.controller.js";
 import { upload } from "../../middlewares/multer.middleware.js";
 
@@ -37,12 +38,11 @@ router.get(
   ensureSelfOrManagerialAccess,
   getEmployeeById
 );
-router.patch(
-  "/:id",
-  requirePermission("employee:manage"),
-  ensureSelfOrManagerialAccess,
-  updateEmployee
-);
+
+
+router.patch("/:id/basic", requirePermission("employee:update:basic"), ensureSelfOrManagerialAccess, updateBasicDetails);
+router.patch("/:id/salary", requirePermission("employee:update:salary"), ensureSelfOrManagerialAccess, updateSalary);
+router.patch("/:id/role", requirePermission("employee:manage"), ensureSelfOrManagerialAccess, updateRole);
 
 router.delete(
   "/:id",
