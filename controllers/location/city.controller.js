@@ -36,8 +36,8 @@ export const getCitiesDropdown = asyncHandler(async (req, res) => {
   }
 
   const dropdownData = cities.map((city) => ({
-    value: city.id,
-    label: city.cityName,
+    value: city.cityName,
+    label: city.id,
     stateId: city.stateId,
   }));
 

@@ -292,4 +292,4 @@ const getOwnAttendance = asyncHandler(async(req,res)=> {
      
 })
 
-export {clockIn,clockOut,getAllAttendance,getOwnAttendance}
+export {clockIn,clockOut,getAllAttendance,getOwnAttendance}  

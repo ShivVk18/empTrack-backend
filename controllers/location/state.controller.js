@@ -17,8 +17,8 @@ export const getStatesDropdown = asyncHandler(async (req, res) => {
   }
 
   const dropdownData = states.map((state) => ({
-    value: state.id,
-    label: state.stateName,
+    value: state.stateName,
+    label: state.id,
   }));
 
   return res
