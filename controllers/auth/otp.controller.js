@@ -18,7 +18,7 @@ import {
 } from "../../utils/auth.utils.js";
 
 const sendLoginOTP = asyncHandler(async (req, res) => {
-  const { userId, userType, method = "email" } = req.body;
+  const { userId, userType } = req.body;
 
   if (!userId || !userType) {
     throw new ApiError(400, "User ID and user type are required");
@@ -26,10 +26,6 @@ const sendLoginOTP = asyncHandler(async (req, res) => {
 
   if (!["admin", "employee"].includes(userType)) {
     throw new ApiError(400, "Invalid user type");
-  }
-
-  if (method !== "email") {
-    throw new ApiError(400, "Only email delivery method is supported");
   }
 
   let user = null;
@@ -95,6 +91,7 @@ const sendLoginOTP = asyncHandler(async (req, res) => {
     }, "OTP sent successfully")
   );
 });
+
 
 const verifyLoginOtp = asyncHandler(async (req, res) => {
   try {

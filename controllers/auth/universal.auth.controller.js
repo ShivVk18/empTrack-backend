@@ -350,11 +350,11 @@ const addEmployee = asyncHandler(async (req, res) => {
 
 const universalLogin = asyncHandler(async (req, res) => {
 
-  console.log("REQ BODY:", req.body);
-  const { emailOrMobile, password, userType } = req.body;
-   
+  
+  const { email, password, userType } = req.body;
+    
 
-  if (!emailOrMobile || !password || !userType) {
+  if (!email || !password || !userType) {
     throw new ApiError(
       400,
       "Email/Mobile, password, and user type are required"
@@ -365,25 +365,22 @@ const universalLogin = asyncHandler(async (req, res) => {
     throw new ApiError(400, "User type must be either 'admin' or 'employee'");
   }
 
-  const isEmail = emailOrMobile.includes("@");
+  const isEmail = email.includes("@");
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const mobileRegex = /^[0-9]{10}$/;
+ 
 
-  if (isEmail && !emailRegex.test(emailOrMobile)) {
+  if (isEmail && !emailRegex.test(email)) {
     throw new ApiError(400, "Invalid email format");
   }
-  if (!isEmail && !mobileRegex.test(emailOrMobile)) {
-    throw new ApiError(400, "Invalid mobile number format");
-  }
-
+  
   let user = null;
   let foundUserType = null;
 
   try {
     if (userType === "admin") {
-      const searchField = isEmail ? "email" : "mobile";
+      
       user = await prisma.admin.findFirst({
-        where: { [searchField]: emailOrMobile },
+        where: { email:email },
         select: {
           id: true,
           name: true,
@@ -402,10 +399,10 @@ const universalLogin = asyncHandler(async (req, res) => {
       });
       foundUserType = "admin";
     } else {
-      const searchField = isEmail ? "email" : "mobileNo";
+      
       user = await prisma.employee.findFirst({
         where: {
-          [searchField]: emailOrMobile,
+          email:email,
           isActive: true,
         },
         select: {
