@@ -39,13 +39,13 @@ const getCompanyDetails = asyncHandler(async (req, res) => {
 
 const updateCompanyDetails = asyncHandler(async (req, res) => {
   const companyId = req.user?.companyId;
-  const { companyName, industry, address, stateName, cityName } = req.body;
+  const { companyName, industry, address, countryName ,stateName, cityName } = req.body;
 
   if (!companyId) {
     throw new ApiError(401, "Company ID is required");
   }
 
-  if (!companyName || !industry || !address || !stateName || !cityName) {
+  if (!companyName || !industry || !address || !countryName || !stateName || !cityName) {
     throw new ApiError(400, "All fields are required");
   }
 
@@ -60,21 +60,8 @@ const updateCompanyDetails = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Company name is already taken");
   }
 
-  const locationData = await prisma.state.findFirst({
-    where: { stateName: stateName },
-    include: {
-      cities: {
-        where: {
-          cityName: cityName,
-        },
-        take: 1,
-      },
-    },
-  });
+  
 
-  if (!locationData || !locationData.cities[0]) {
-    throw new ApiError(400, "Invalid state or city");
-  }
 
   const updatedCompany = await prisma.company.update({
     where: { id: companyId },
@@ -82,13 +69,11 @@ const updateCompanyDetails = asyncHandler(async (req, res) => {
       name: companyName,
       industry: industry,
       address: address,
-      stateId: locationData.id,
-      cityId: locationData.cities[0].id,
+      countryName:countryName,
+      stateName:stateName,
+      cityName:cityName
     },
-    include: {
-      state: { select: { stateName: true } },
-      city: { select: { cityName: true } },
-    },
+    
   });
 
   return res
@@ -104,7 +89,7 @@ const updateCompanyDetails = asyncHandler(async (req, res) => {
 
 const deleteCompany = asyncHandler(async (req, res) => {
   const companyId = req.user?.companyId;
-  const currentUser = req.user;
+  
   const userType = req.userType;
 
   if (!companyId) {

@@ -14,7 +14,7 @@ import { uploadOnCloudinary } from "../../utils/cloudinary.js";
 import { hasPermission } from "../../middlewares/auth.middleware.js";
 import jwt from "jsonwebtoken";
 import { sendWelcomeEmail } from "../email/email.controller.js";
-
+import { parsePhoneNumberFromString as parsePhoneNumber } from 'libphonenumber-js'
 
 
 
@@ -23,12 +23,14 @@ const adminSignUp = asyncHandler(async (req, res) => {
     adminName,
     email,
     password,
+    countryCode,
     mobile,
     companyName,
     industry,
     address,
     stateName,
     cityName,
+    countryName
   } = req.body;
 
   const requiredFields = [
@@ -41,6 +43,7 @@ const adminSignUp = asyncHandler(async (req, res) => {
     address,
     stateName,
     cityName,
+    countryName
   ];
 
   if (requiredFields.some((field) => !field?.trim())) {
@@ -56,23 +59,21 @@ const adminSignUp = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Invalid email format");
   }
 
-  const mobileRegex = /^[0-9]{10}$/;
-  if (!mobileRegex.test(mobile)) {
-    throw new ApiError(400, "Mobile number must be 10 digits");
+  const mobileNumber =  parsePhoneNumber(mobile,countryCode)
+   
+  if (!mobileNumber || !mobileNumber.isValid()) {
+    throw new ApiError(400, 'Invalid mobile number for given country');
   }
 
-  const [existingCompany, existingAdmin, locationData] = await Promise.all([
+  const [existingCompany, existingAdmin] = await Promise.all([
     prisma.company.findUnique({ where: { name: companyName } }),
     prisma.admin.findFirst({
       where: {
         OR: [{ email }, { mobile }],
       },
     }),
-    prisma.state.findFirst({
-      where: { stateName },
-      include: { cities: { where: { cityName }, take: 1 } },
-    }),
-  ]);
+   
+  ]); 
 
   if (existingCompany) {
     throw new ApiError(
@@ -85,9 +86,7 @@ const adminSignUp = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Admin with this email or mobile already exists");
   }
 
-  if (!locationData || !locationData.cities[0]) {
-    throw new ApiError(400, "Invalid state or city");
-  }
+  const formattedMobileNumber = mobileNumber.number
 
   const hashedPassword = await hashPassword(password);
 
@@ -95,10 +94,11 @@ const adminSignUp = asyncHandler(async (req, res) => {
     const company = await tx.company.create({
       data: {
         name: companyName,
-        industry,
-        address,
-        stateId: locationData.id,
-        cityId: locationData.cities[0].id,
+        industry:industry,
+        address:address,
+        countryName:countryName,
+        stateName:stateName,
+        cityName:cityName,
       },
     });
 
@@ -107,14 +107,15 @@ const adminSignUp = asyncHandler(async (req, res) => {
         name: adminName,
         email: email,
         password: hashedPassword,
-        mobile: mobile,
+        countryCode:countryCode,
+        mobileNo: formattedMobileNumber,
         companyId: company.id,
       },
       select: {
         id: true,
         name: true,
         email: true,
-        mobile: true,
+        mobileNo: true,
         companyId: true,
         createdAt: true,
       },
@@ -160,6 +161,7 @@ const addEmployee = asyncHandler(async (req, res) => {
     employeeCode,
     employeeName,
     email,
+    countryCode,
     mobileNo,
     salary,
     gender,
@@ -171,9 +173,10 @@ const addEmployee = asyncHandler(async (req, res) => {
     role,
     accountNo,
     pfAccountNo,
-    bankCode,
+    countryName,
     stateName,
     cityName,
+    bankCode,
     designationName,
     departmentName,
   } = req.body;
@@ -195,9 +198,10 @@ const addEmployee = asyncHandler(async (req, res) => {
     type,
     accountNo,
     pfAccountNo,
-    bankCode,
+    countryName,
     stateName,
     cityName,
+    bankCode,
     designationName,
     departmentName,
   ];
@@ -231,9 +235,10 @@ const addEmployee = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Invalid email format");
   }
 
-  const mobileRegex = /^[0-9]{10}$/;
-  if (!mobileRegex.test(mobileNo)) {
-    throw new ApiError(400, "Mobile number must be 10 digits");
+  const mobileNumber =  parsePhoneNumber(mobileNo,countryCode)
+   
+  if (!mobileNumber || !mobileNumber.isValid()) {
+    throw new ApiError(400, 'Invalid mobile number for given country');
   }
 
   if (Number.parseFloat(salary) <= 0) {
@@ -259,28 +264,23 @@ const addEmployee = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Profile picture is required");
   }
 
-  const [locationData, department, designation, bankCodeData] =
+  const [department, designation] =
     await Promise.all([
-      prisma.state.findFirst({
-        where: { stateName },
-        include: { cities: { where: { cityName }, take: 1 } },
-      }),
+    
       prisma.department.findFirst({
         where: { name: departmentName, companyId },
       }),
       prisma.designation.findFirst({
         where: { name: designationName, companyId },
       }),
-      prisma.bankCode.findUnique({ where: { code: bankCode } }),
+     
     ]);
 
-  if (!locationData || !locationData.cities[0]) {
-    throw new ApiError(400, "Invalid state or city");
-  }
+ 
 
   if (!department) throw new ApiError(400, "Invalid department");
   if (!designation) throw new ApiError(400, "Invalid designation");
-  if (!bankCodeData) throw new ApiError(400, "Invalid bank code");
+   
 
   const profilePicUri = await uploadOnCloudinary(profilePicPath);
   if (!profilePicUri?.url) {
@@ -288,13 +288,14 @@ const addEmployee = asyncHandler(async (req, res) => {
   }
 
   const hashedPassword = await hashPassword(password);
-
+   const formattedMobileNumber = mobileNumber.number 
   const employee = await prisma.employee.create({
     data: {
       employeeCode,
       name: employeeName,
       email,
-      mobileNo,
+      countryCode:countryCode,
+      mobileNo:formattedMobileNumber,
       salary: Number.parseFloat(salary),
       gender,
       dob: new Date(dob),
@@ -306,9 +307,10 @@ const addEmployee = asyncHandler(async (req, res) => {
       profilePic: profilePicUri.url,
       accountNo,
       pfAccountNo,
-      bankCodeId: bankCodeData.id,
-      cityId: locationData.cities[0].id,
-      stateId: locationData.id,
+      bankCode:bankCode,
+      countryName:countryName,
+      stateName:stateName,
+      cityName:cityName,
       departmentId: department.id,
       designationId: designation.id,
       companyId,
@@ -328,9 +330,10 @@ const addEmployee = asyncHandler(async (req, res) => {
       isActive: true,
       department: { select: { name: true } },
       designation: { select: { name: true } },
-      state: { select: { stateName: true } },
-      city: { select: { cityName: true } },
-      bankCode: { select: { code: true, name: true } },
+      bankCode:true,
+      countryName:true,
+      stateName:true,
+      cityName:true
     },
   });
 
@@ -357,7 +360,7 @@ const universalLogin = asyncHandler(async (req, res) => {
   if (!email || !password || !userType) {
     throw new ApiError(
       400,
-      "Email/Mobile, password, and user type are required"
+      "Email, password, and user type are required"
     );
   }
 
@@ -479,7 +482,7 @@ const getProfile = asyncHandler(async (req, res) => {
         id: true,
         name: true,
         email: true,
-        mobile: true,
+        mobileNo: true,
         companyId: true,
         createdAt: true,
         company: {
@@ -487,8 +490,9 @@ const getProfile = asyncHandler(async (req, res) => {
             name: true,
             industry: true,
             address: true,
-            state: { select: { stateName: true } },
-            city: { select: { cityName: true } },
+            countryName:true,
+           stateName:true,
+           cityName:true
           },
         },
       },
@@ -519,9 +523,10 @@ const getProfile = asyncHandler(async (req, res) => {
         joinedAt: true,
         department: { select: { name: true } },
         designation: { select: { name: true } },
-        city: { select: { cityName: true } },
-        state: { select: { stateName: true } },
-        bankCode: { select: { code: true, name: true } },
+        countryName:true,
+        cityName:true,
+        stateName:true,
+        bankCode:true,
         company: {
           select: {
             name: true,

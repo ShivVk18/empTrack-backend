@@ -221,6 +221,10 @@ const updateBasicDetails = asyncHandler(async (req, res) => {
     address2,
     accountNo,
     pfAccountNo,
+    countryName,
+    stateName,
+    cityName,
+    bankCode
   } = req.body;
   const currentUser = req.user;
   const userType = req.userType;
@@ -290,6 +294,10 @@ const updateBasicDetails = asyncHandler(async (req, res) => {
     address2,
     accountNo,
     pfAccountNo,
+    countryName,
+    stateName,
+    cityName,
+    bankCode
   };
 
   Object.keys(updateData).forEach(

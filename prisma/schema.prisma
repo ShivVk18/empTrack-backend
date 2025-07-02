@@ -78,14 +78,14 @@ model Company {
   name      String   @unique
   industry  Industry
   address   String
-  stateId   Int
-  cityId    Int
+  countryName      String
+  stateName        String
+  cityName         String
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  state           State            @relation(fields: [stateId], references: [id])
-  city            City             @relation(fields: [cityId], references: [id])
+  
   admin           Admin?
   employees       Employee[]
   departments     Department[]
@@ -94,9 +94,11 @@ model Company {
   payMasters      PayMaster[]
   attendancePlans AttendancePlan[]
   leavePolicies   LeavePolicy[]
-  holidays        Holiday[]
+  holidays        Holiday[] 
   notifications   Notification[]
   complains       Complain[]
+  leaveApplications LeaveApplication[]
+  attendances Attendance[]
 }
 
 model Admin {
@@ -104,7 +106,8 @@ model Admin {
   name            String
   email           String    @unique
   password        String
-  mobile          String    @unique
+  countryCode String
+  mobileNo    String
   companyId       Int       @unique
   refreshToken    String?
   otp             String?
@@ -115,6 +118,9 @@ model Admin {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+
+  @@unique([countryCode,mobileNo])
 }
 
 model Employee {
@@ -122,7 +128,8 @@ model Employee {
   employeeCode     String       @unique
   name             String
   email            String       @unique
-  mobileNo         String       @unique
+  countryCode String
+  mobileNo    String
   password         String
   salary           Float
   gender           Gender
@@ -148,17 +155,15 @@ model Employee {
   companyId        Int
   departmentId     Int
   designationId    Int
-  bankCodeId       Int
-  stateId          Int
-  cityId           Int
+  bankCode         String
+  countryName      String
+  stateName        String
+  cityName         String
   attendancePlanId Int?
 
   company             Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
   department          Department         @relation(fields: [departmentId], references: [id])
   designation         Designation        @relation(fields: [designationId], references: [id])
-  bankCode            BankCode           @relation(fields: [bankCodeId], references: [id])
-  state               State              @relation(fields: [stateId], references: [id])
-  city                City               @relation(fields: [cityId], references: [id])
   payMasters          PayMaster[]
   attendances         Attendance[]
   leaveApplications   LeaveApplication[]
@@ -167,6 +172,8 @@ model Employee {
   complains           Complain[]
   attendancePlan      AttendancePlan?    @relation(fields: [attendancePlanId], references: [id])
   approvedAttendances Attendance[]       @relation("AttendanceApprover")
+
+  @@unique([countryCode,mobileNo])
 }
 
 model Department {
@@ -273,38 +280,6 @@ model PayMaster {
   @@unique([employeeId, month, year])
 }
 
-model State {
-  id        Int        @id @default(autoincrement())
-  stateName String     @unique
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  cities    City[]
-  companies Company[]
-  employees Employee[]
-}
-
-model City {
-  id        Int        @id @default(autoincrement())
-  cityName  String
-  stateId   Int
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @default(now())
-  state     State      @relation(fields: [stateId], references: [id], onDelete: Cascade)
-  companies Company[]
-  employees Employee[]
-
-  @@unique([cityName, stateId])
-}
-
-model BankCode {
-  id        Int        @id @default(autoincrement())
-  code      String     @unique
-  name      String
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  employees Employee[]
-}
-
 model AttendancePlan {
   id              Int        @id @default(autoincrement())
   companyId       Int
@@ -326,8 +301,9 @@ model AttendancePlan {
 }
 
 model Attendance {
-  id           Int              @id @default(autoincrement())
+   id           Int              @id @default(autoincrement())
   employeeId   Int
+  companyId    Int              // 👈 Add this
   date         DateTime         @db.Date
   status       AttendanceStatus
   inTime       DateTime?
@@ -338,7 +314,9 @@ model Attendance {
   remarks      String?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
+
   employee     Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  company      Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   approvedBy   Employee?        @relation("AttendanceApprover", fields: [approvedById], references: [id])
 
   @@unique([employeeId, date])
@@ -371,8 +349,9 @@ model LeavePolicy {
 }
 
 model LeaveApplication {
-  id            Int                    @id @default(autoincrement())
+   id            Int                    @id @default(autoincrement())
   employeeId    Int
+  companyId     Int
   leavePolicyId Int
   fromDate      DateTime               @db.Date
   toDate        DateTime               @db.Date
@@ -383,9 +362,11 @@ model LeaveApplication {
   remarks       String?
   isHalfDay     Boolean                @default(false)
   session       String?
+  
   employee      Employee               @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   leavePolicy   LeavePolicy            @relation(fields: [leavePolicyId], references: [id])
   approvedBy    Employee?              @relation("LeaveApprover", fields: [approvedById], references: [id])
+  company       Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 model Notification {

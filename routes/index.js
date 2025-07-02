@@ -17,7 +17,6 @@ router.use("/api/v1/department",departmentRoutes)
 router.use("/api/v1/designation",designationRoutes)
 router.use("/api/v1/email",emailRoutes)
 router.use("/api/v1/employee",employeeRoutes)
-router.use("/api/v1/location",locationRoutes)
 router.use("/api/v1/payroll",payrollRoutes)
 
 export default router

@@ -1,16 +1,16 @@
-import prisma from "../../config/prismaClient";
-import { ApiResponse } from "../../utils/ApiResponse";
-import { ApiError } from "../../utils/ApiError";
-import { asyncHandler } from "../../utils/asyncHandler";
+import { asyncHandler } from "../../utils/asyncHandler.js";
+import { ApiError } from "../../utils/ApiError.js";
+import { ApiResponse } from "../../utils/ApiResponse.js";
+import prisma from "../../config/prismaClient.js";
 import dayjs from "dayjs";
 
 
 const clockIn = asyncHandler(async (req, res) => {
-  const userRole = req.user.role;
   const userId = req.user.id;
+  const companyId = req.user.companyId;
 
-  if (["HR", "MANAGER", "SR_MANAGER", "ACCOUNTANT"].includes(userRole)) {
-    throw new ApiError(403, "Only employees can clock in");
+  if (!userId || !companyId) {
+    throw new ApiError(400, "Invalid request. Please login again.");
   }
 
   const today = dayjs().startOf("day").toDate();
@@ -19,59 +19,37 @@ const clockIn = asyncHandler(async (req, res) => {
     where: {
       employeeId_date: {
         employeeId: userId,
-        date: today,
-      },
-    },
+        date: today
+      }
+    }
   });
 
   if (existingAttendance) {
-    throw new ApiError(400, "You have already clocked in today");
+    throw new ApiError(400, "Already clocked in for today");
   }
 
-  const employee = await prisma.employee.findUnique({
-    where: { id: userId },
-    include: { attendancePlan: true },
-  });
-
-  if (!employee.attendancePlan) {
-    throw new ApiError(400, "No attendance plan assigned");
-  }
-
-  const now = new Date();
-  const [shiftHour, shiftMinute] = employee.attendancePlan.shiftStartTime
-    .split(":")
-    .map(Number);
-
-  const shiftStartTime = dayjs(today).hour(shiftHour).minute(shiftMinute).second(0);
-  const lateThreshold = shiftStartTime.add(employee.attendancePlan.allowedLateMins || 0, "minute");
-
-  let status = "PRESENT";
-
-  if (dayjs(now).isAfter(lateThreshold)) {
-    status = "LATE";
-  }
-
-  await prisma.attendance.create({
+  const newAttendance = await prisma.attendance.create({
     data: {
       employeeId: userId,
+      companyId,
       date: today,
-      inTime: now,
-      status,
-      isApproved: true, 
-      approvedById: userId,
-    },
+      inTime: new Date(),
+      status: "PRESENT",
+      isApproved: true,
+      approvedById: userId
+    }
   });
 
-  res.status(201).json(new ApiResponse(200, status, "Clock-in successful"));
+  return res
+    .status(201)
+    .json(new ApiResponse(201, newAttendance, "Clock-in successful"));
 });
 
-
 const clockOut = asyncHandler(async (req, res) => {
-  const userRole = req.user.role;
   const userId = req.user.id;
 
-  if (["HR", "MANAGER", "SR_MANAGER", "ACCOUNTANT"].includes(userRole)) {
-    throw new ApiError(403, "Only employees can clock out");
+  if (!userId) {
+    throw new ApiError(400, "Invalid request. Please login again.");
   }
 
   const today = dayjs().startOf("day").toDate();
@@ -80,216 +58,109 @@ const clockOut = asyncHandler(async (req, res) => {
     where: {
       employeeId_date: {
         employeeId: userId,
-        date: today,
-      },
-    },
+        date: today
+      }
+    }
   });
 
   if (!existingAttendance) {
-    throw new ApiError(400, "You have not clocked in yet");
+    throw new ApiError(400, "Please clock in first");
   }
 
   if (existingAttendance.outTime) {
-    throw new ApiError(400, "You have already clocked out today");
-  }
-
-  const employee = await prisma.employee.findUnique({
-    where: { id: userId },
-    include: { attendancePlan: true },
-  });
-
-  if (!employee.attendancePlan) {
-    throw new ApiError(400, "No attendance plan assigned");
+    throw new ApiError(400, "Already clocked out for today");
   }
 
   const now = dayjs();
   const inTime = dayjs(existingAttendance.inTime);
 
-  const totalWorkingHours = now.diff(inTime, "minute") / 60;
+  const totalHours = now.diff(inTime, "minute") / 60;
 
-  let status = "PRESENT";
-
-  if (totalWorkingHours < employee.attendancePlan.workingHours && !employee.attendancePlan.allowEarlyLeave) {
-    status = "EARLY_LEAVE";
+  if (totalHours <= 0) {
+    throw new ApiError(400, "Clock-out time cannot be before clock-in time");
   }
 
-  await prisma.attendance.update({
+  const updatedAttendance = await prisma.attendance.update({
     where: { id: existingAttendance.id },
     data: {
       outTime: now.toDate(),
-      totalHours: totalWorkingHours.toFixed(2),
-      status,
-      isApproved: true, 
-      approvedById: userId,
-    },
+      totalHours: parseFloat(totalHours.toFixed(2))
+    }
   });
 
-  res.status(201).json(new ApiResponse(200, status, "Clock-out successful"));
+  return res
+    .status(200)
+    .json(new ApiResponse(200, updatedAttendance, "Clock-out successful"));
 });
+
 
 const getAllAttendance = asyncHandler(async (req, res) => {
-  const userRole = req.user.role;
-  const userType = req.userType;
+  const { page = 1, limit = 10, status, employeeId, date } = req.query;
+  const skip = (page - 1) * limit;
 
-  if (!["HR", "SR_MANAGER", "MANAGER"].includes(userRole) && userType !== "admin") {
-    throw new ApiError(403, "Access denied");
+  if (isNaN(page) || isNaN(limit)) {
+    throw new ApiError(400, "Page and limit must be numbers");
   }
 
-  const { employeeName, departmentId, status, startDate, endDate, page = 1, limit = 10 } = req.query;
-
-  const filters = {};
-
-  
-  const employeeFilters = {
-    companyId: req.user.companyId,
+  const filters = {
+    companyId: req.user.companyId
   };
 
-  if (employeeName) {
-    employeeFilters.name = { contains: employeeName, mode: "insensitive" };
+  if (status) filters.status = status;
+  if (employeeId) filters.employeeId = +employeeId;
+  if (date) {
+    const filterDate = dayjs(date).startOf("day").toDate();
+    filters.date = filterDate;
   }
 
-  if (departmentId) {
-    employeeFilters.departmentId = Number(departmentId);
-  }
+  const [attendances, total] = await Promise.all([
+    prisma.attendance.findMany({
+      where: filters,
+      skip: +skip,
+      take: +limit,
+      orderBy: { date: "desc" },
+      include: { employee: true }
+    }),
+    prisma.attendance.count({ where: filters })
+  ]);
 
- 
-  if (userRole === "MANAGER") {
-    employeeFilters.departmentId = req.user.departmentId;
-  }
-
-  const matchingEmployees = await prisma.employee.findMany({
-    where: employeeFilters,
-    select: { id: true },
-  });
-
-  const employeeIds = matchingEmployees.map((emp) => emp.id);
-
-  
-  if (employeeIds.length > 0) {
-    filters.employeeId = { in: employeeIds };
-  } else if (employeeName || departmentId || userRole === "MANAGER") {
-    
-    return res.status(200).json(new ApiResponse(200, {
-      totalRecords: 0,
-      totalPages: 0,
-      currentPage: Number(page),
-      records: [],
-    }, "Attendance records fetched successfully"));
-  }
-
-  if (status) {
-    filters.status = status;
-  }
-
-  if (startDate && endDate) {
-    filters.date = {
-      gte: new Date(startDate),
-      lte: new Date(endDate),
-    };
-  }
-
-  const skip = (Number(page) - 1) * Number(limit);
-
-  const attendanceRecords = await prisma.attendance.findMany({
-    where: filters,
-    include: {
-      employee: {
-        select: {
-          id: true,
-          name: true,
-          employeeCode: true,
-          department: {
-            select: { name: true },
-          },
-        },
-      },
-    },
-    skip,
-    take: Number(limit),
-    orderBy: {
-      date: "desc",
-    },
-  });
-
-  const totalRecords = await prisma.attendance.count({
-    where: filters,
-  });
-
-  res.status(200).json(
-    new ApiResponse(200, {
-      totalRecords,
-      totalPages: Math.ceil(totalRecords / limit),
-      currentPage: Number(page),
-      records: attendanceRecords,
-    }, "Attendance records fetched successfully")
-  );
+  return res
+    .status(200)
+    .json(new ApiResponse(200, { attendances, total }, "Attendance fetched"));
 });
 
-const getOwnAttendance = asyncHandler(async(req,res)=> {
-     const userId = req.user.id
-     const userRole = req.user.role 
 
-    if (["HR", "MANAGER", "SR_MANAGER", "ACCOUNTANT"].includes(userRole)) {
-    throw new ApiError(403, "Only employees can see there attendance");
+const getOwnAttendance = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  const { startDate, endDate } = req.query;
+
+  if (!startDate || !endDate) {
+    throw new ApiError(400, "startDate and endDate are required");
   }
 
+  const start = dayjs(startDate).startOf("day");
+  const end = dayjs(endDate).endOf("day");
 
-  const {month,year} = req.query
-
-  if (!month || !year) {
-    throw new ApiError(400, "Month and year are required");
+  if (!start.isValid() || !end.isValid()) {
+    throw new ApiError(400, "Invalid date format");
   }
-  
- const startDate = dayjs(`${year}-${month}-01`).startOf("month").toDate();
- const endDate = dayjs(startDate).endOf("month").toDate();
-   
 
- const attenDanceRecords = await prisma.attendance.findMany({
-    where:{
-         employeeId:userId,
-         date:{
-            gte:startDate,
-            lte:endDate
-         }
+  const attendances = await prisma.attendance.findMany({
+    where: {
+      employeeId: userId,
+      companyId: req.user.companyId,
+      date: {
+        gte: start.toDate(),
+        lte: end.toDate()
+      }
     },
-    orderBy:{
-        date:'asc'
-    }
- })
+    orderBy: { date: "asc" }
+  });
 
-  const summary = {
-    totalDays: dayjs(endDate).date(),
-    presentDays:0,
-    absentDays:0,
-    lateDays:0,
-    earlyLeaveDays:0,
-    leaveDays:0
-  } 
+  return res
+    .status(200)
+    .json(new ApiResponse(200, attendances, "Attendance fetched"));
+});
 
-  const formattedRecords = attenDanceRecords.map((record)=> {
-    if (record.status === "PRESENT") summary.presentDays += 1;
-    else if (record.status === "ABSENT") summary.absentDays += 1;
-    else if (record.status === "LATE") summary.lateDays += 1;
-    else if (record.status === "EARLY_LEAVE") summary.earlyLeaveDays += 1;
-    else if (record.status === "LEAVE") summary.leaveDays += 1;
-
-    return {
-      date: dayjs(record.date).format("YYYY-MM-DD"),
-      status: record.status,
-      inTime: record.inTime,
-      outTime: record.outTime,
-      totalHours: record.totalHours,
-    };
-  })
-   
-
-  res.status(200).json(
-    new ApiResponse(200,{
-      summary,
-      attendanceRecord : formattedRecords
-    },"Attendance fetched successfully")
-  )
-     
-})
 
 export {clockIn,clockOut,getAllAttendance,getOwnAttendance}  
