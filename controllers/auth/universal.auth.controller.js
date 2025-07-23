@@ -28,9 +28,10 @@ const adminSignUp = asyncHandler(async (req, res) => {
     companyName,
     industry,
     address,
+    countryName,
     stateName,
     cityName,
-    countryName
+    
   } = req.body;
 
   const requiredFields = [
@@ -41,9 +42,10 @@ const adminSignUp = asyncHandler(async (req, res) => {
     companyName,
     industry,
     address,
+    countryName,
     stateName,
     cityName,
-    countryName
+    
   ];
 
   if (requiredFields.some((field) => !field?.trim())) {
@@ -60,16 +62,19 @@ const adminSignUp = asyncHandler(async (req, res) => {
   }
 
   const mobileNumber =  parsePhoneNumber(mobile,countryCode)
+  
    
   if (!mobileNumber || !mobileNumber.isValid()) {
     throw new ApiError(400, 'Invalid mobile number for given country');
   }
 
+  const formattedMobileNumber = mobileNumber.number
+
   const [existingCompany, existingAdmin] = await Promise.all([
     prisma.company.findUnique({ where: { name: companyName } }),
     prisma.admin.findFirst({
       where: {
-        OR: [{ email }, { mobile }],
+        OR: [{ email }, { mobileNo:formattedMobileNumber }],
       },
     }),
    
@@ -86,7 +91,7 @@ const adminSignUp = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Admin with this email or mobile already exists");
   }
 
-  const formattedMobileNumber = mobileNumber.number
+  
 
   const hashedPassword = await hashPassword(password);
 
@@ -100,6 +105,15 @@ const adminSignUp = asyncHandler(async (req, res) => {
         stateName:stateName,
         cityName:cityName,
       },
+      select:{
+        name:true,
+        industry:true,
+        stateName:true,
+        countryName:true,
+        cityName:true,
+        id:true,
+        address:true
+      }
     });
 
     const admin = await tx.admin.create({
@@ -157,6 +171,8 @@ const uniqueCompanyName = asyncHandler(async (req, res) => {
 
 
 const addEmployee = asyncHandler(async (req, res) => {
+  console.log("👉 Add Employee API hit");
+
   const {
     employeeCode,
     employeeName,
@@ -181,9 +197,15 @@ const addEmployee = asyncHandler(async (req, res) => {
     departmentName,
   } = req.body;
 
+  console.log("📦 Received Body:", req.body);
+
   const companyId = req.user?.companyId;
   const currentUser = req.user;
   const currentUserType = req.userType;
+
+  console.log("🏢 Company ID:", companyId);
+  console.log("👤 Current User:", currentUser);
+  console.log("👤 Current User Type:", currentUserType);
 
   const requiredFields = [
     employeeCode,
@@ -207,6 +229,7 @@ const addEmployee = asyncHandler(async (req, res) => {
   ];
 
   if (requiredFields.some((field) => !field?.toString().trim())) {
+    console.log("⚠️ Required fields missing");
     throw new ApiError(400, "All required fields must be provided");
   }
 
@@ -215,6 +238,7 @@ const addEmployee = asyncHandler(async (req, res) => {
       currentUserType !== "admin" &&
       !hasPermission(currentUser.role, currentUserType, "employee:manage")
     ) {
+      console.log("🚫 No permission to assign role:", role);
       throw new ApiError(
         403,
         "You don't have permission to assign this role. Please contact an Admin."
@@ -222,26 +246,32 @@ const addEmployee = asyncHandler(async (req, res) => {
     }
 
     if (currentUser.role === "HR" && role === "SR_MANAGER") {
+      console.log("🚫 HR cannot assign SR_MANAGER role");
       throw new ApiError(403, "HR cannot assign Senior Manager role");
     }
   }
 
   if (password.length < 8) {
+    console.log("🚫 Password too short");
     throw new ApiError(400, "Password must be at least 8 characters long");
   }
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
+    console.log("🚫 Invalid email format");
     throw new ApiError(400, "Invalid email format");
   }
 
-  const mobileNumber =  parsePhoneNumber(mobileNo,countryCode)
-   
+  const mobileNumber = parsePhoneNumber(mobileNo, countryCode);
+  console.log("📲 Parsed Mobile Number:", mobileNumber);
+
   if (!mobileNumber || !mobileNumber.isValid()) {
-    throw new ApiError(400, 'Invalid mobile number for given country');
+    console.log("🚫 Invalid mobile number");
+    throw new ApiError(400, "Invalid mobile number for given country");
   }
 
   if (Number.parseFloat(salary) <= 0) {
+    console.log("🚫 Salary must be greater than 0");
     throw new ApiError(400, "Salary must be greater than 0");
   }
 
@@ -253,51 +283,57 @@ const addEmployee = asyncHandler(async (req, res) => {
   });
 
   if (existingEmployee) {
+    console.log("Employee already exists with provided details");
     throw new ApiError(
       400,
       "Employee with this email, mobile, or employee code already exists"
     );
   }
 
-  const profilePicPath = req.files?.profilePic?.[0]?.path;
+  console.log("Checking Profile Picture...");
+  const profilePicPath = req.file?.path;
+  console.log("Profile Pic Path:", profilePicPath);
+
   if (!profilePicPath) {
     throw new ApiError(400, "Profile picture is required");
   }
 
-  const [department, designation] =
-    await Promise.all([
-    
-      prisma.department.findFirst({
-        where: { name: departmentName, companyId },
-      }),
-      prisma.designation.findFirst({
-        where: { name: designationName, companyId },
-      }),
-     
-    ]);
 
- 
+  const [department, designation] = await Promise.all([
+    prisma.department.findFirst({
+      where: { name: departmentName, companyId },
+    }),
+    prisma.designation.findFirst({
+      where: { name: designationName, companyId },
+    }),
+  ]);
+
+  
 
   if (!department) throw new ApiError(400, "Invalid department");
   if (!designation) throw new ApiError(400, "Invalid designation");
-   
 
+  
   const profilePicUri = await uploadOnCloudinary(profilePicPath);
+  
+
   if (!profilePicUri?.url) {
     throw new ApiError(400, "Failed to upload profile picture");
   }
 
   const hashedPassword = await hashPassword(password);
-   const formattedMobileNumber = mobileNumber.number 
+  const formattedMobileNumber = mobileNumber.number;
+
+  console.log("✅ Creating Employee in Database...");
   const employee = await prisma.employee.create({
     data: {
       employeeCode,
       name: employeeName,
       email,
-      countryCode:countryCode,
-      mobileNo:formattedMobileNumber,
+      countryCode: countryCode,
+      mobileNo: formattedMobileNumber,
       salary: Number.parseFloat(salary),
-      gender,
+      gender:gender,
       dob: new Date(dob),
       address1,
       address2,
@@ -307,10 +343,10 @@ const addEmployee = asyncHandler(async (req, res) => {
       profilePic: profilePicUri.url,
       accountNo,
       pfAccountNo,
-      bankCode:bankCode,
-      countryName:countryName,
-      stateName:stateName,
-      cityName:cityName,
+      bankCode: bankCode,
+      countryName: countryName,
+      stateName: stateName,
+      cityName: cityName,
       departmentId: department.id,
       designationId: designation.id,
       companyId,
@@ -330,38 +366,35 @@ const addEmployee = asyncHandler(async (req, res) => {
       isActive: true,
       department: { select: { name: true } },
       designation: { select: { name: true } },
-      bankCode:true,
-      countryName:true,
-      stateName:true,
-      cityName:true
+      bankCode: true,
+      countryName: true,
+      stateName: true,
+      cityName: true,
     },
   });
 
+  console.log("📧 Sending Welcome Email...");
   const temporaryPassword = req.body.password;
 
   try {
     await sendWelcomeEmail(employee, temporaryPassword);
-    console.log(`Welcome email sent to ${employee.email}`);
+    console.log(`✅ Welcome email sent to ${employee.email}`);
   } catch (error) {
-    console.error("Failed to send welcome email:", error);
+    console.error("❌ Failed to send welcome email:", error);
   }
 
+  console.log("🎉 Employee Created Successfully");
   return res
     .status(201)
     .json(new ApiResponse(201, employee, "Employee created successfully"));
 });
 
-const universalLogin = asyncHandler(async (req, res) => {
 
-  
+const universalLogin = asyncHandler(async (req, res) => {
   const { email, password, userType } = req.body;
-    
 
   if (!email || !password || !userType) {
-    throw new ApiError(
-      400,
-      "Email, password, and user type are required"
-    );
+    throw new ApiError(400, "Email, password, and user type are required");
   }
 
   if (!["admin", "employee"].includes(userType)) {
@@ -370,138 +403,42 @@ const universalLogin = asyncHandler(async (req, res) => {
 
   const isEmail = email.includes("@");
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
- 
 
   if (isEmail && !emailRegex.test(email)) {
     throw new ApiError(400, "Invalid email format");
   }
-  
+
   let user = null;
-  let foundUserType = null;
-
-  try {
-    if (userType === "admin") {
-      
-      user = await prisma.admin.findFirst({
-        where: { email:email },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          mobile: true,
-          password: true,
-          companyId: true,
-          company: {
-            select: {
-              id: true,
-              name: true,
-              industry: true,
-            },
-          },
-        },
-      });
-      foundUserType = "admin";
-    } else {
-      
-      user = await prisma.employee.findFirst({
-        where: {
-          email:email,
-          isActive: true,
-        },
-        select: {
-          id: true,
-          employeeCode: true,
-          name: true,
-          email: true,
-          mobileNo: true,
-          password: true,
-          role: true,
-          type: true,
-          companyId: true,
-          isActive: true,
-          company: {
-            select: {
-              id: true,
-              name: true,
-              industry: true,
-            },
-          },
-          department: {
-            select: { name: true },
-          },
-          designation: {
-            select: { name: true },
-          },
-        },
-      });
-      foundUserType = "employee";
-    }
-
-    if (!user) {
-      throw new ApiError(
-        404,
-        `${userType} not found with provided credentials`
-      );
-    }
-
-    const isPasswordValid = await validatePassword(password, user.password);
-    if (!isPasswordValid) {
-      throw new ApiError(401, "Invalid password");
-    }
-
-    const { password: _, ...userWithoutPassword } = user;
-
-    return res.status(200).json(
-      new ApiResponse(
-        200,
-        {
-          user: userWithoutPassword,
-          userType: foundUserType,
-          requiresOTP: true,
-          message: "Credentials verified. Please verify OTP to complete login.",
-        },
-        "Credentials verified successfully"
-      )
-    );
-  } catch (error) {
-    console.error("Universal login error:", error);
-    throw new ApiError(500, "Login failed. Please try again.");
-  }
-});
-
-const getProfile = asyncHandler(async (req, res) => {
-  const userId = req.user.id;
-  const userType = req.userType;
-
-  let profile = null;
 
   if (userType === "admin") {
-    profile = await prisma.admin.findUnique({
-      where: { id: userId },
+    user = await prisma.admin.findFirst({
+      where: { email },
       select: {
         id: true,
         name: true,
         email: true,
         mobileNo: true,
+        password: true,
         companyId: true,
-        createdAt: true,
         company: {
           select: {
+            id: true,
             name: true,
             industry: true,
-            address: true,
+            address:true,
+            stateName:true,
+            cityName:true,
             countryName:true,
-           stateName:true,
-           cityName:true
+            isActive:true
           },
         },
       },
     });
   } else {
-    profile = await prisma.employee.findFirst({
+    user = await prisma.employee.findFirst({
       where: {
-        id: userId,
-        companyId: req.user.companyId,
+        email,
+        isActive: true,
       },
       select: {
         id: true,
@@ -509,43 +446,228 @@ const getProfile = asyncHandler(async (req, res) => {
         name: true,
         email: true,
         mobileNo: true,
-        salary: hasPermission(req.user.role, userType, "payroll:read") ? true:false,
-        gender: true,
-        dob: true,
-        address1: true,
-        address2: true,
-        type: true,
+        password: true,
         role: true,
-        profilePic: true,
-        accountNo: true,
-        pfAccountNo: true,
+        type: true,
+        address1:true,
+        address2:true,
+        companyId: true,
         isActive: true,
-        joinedAt: true,
-        department: { select: { name: true } },
-        designation: { select: { name: true } },
-        countryName:true,
-        cityName:true,
-        stateName:true,
-        bankCode:true,
+        profilePic:true,
         company: {
           select: {
+            id: true,
             name: true,
             industry: true,
           },
+        },
+        department: {
+          select: { name: true },
+        },
+        designation: {
+          select: { name: true },
         },
       },
     });
   }
 
-  if (!profile) {
-    throw new ApiError(404, `${userType} not found`);
+  if (!user) {
+    throw new ApiError(404, `${userType} not found with provided credentials`);
   }
+
+  const isPasswordValid = await validatePassword(password, user.password);
+  if (!isPasswordValid) {
+    throw new ApiError(401, "Invalid password");
+  }
+
+  const { password: _, ...userWithoutPassword } = user;
+
+  // ✅ Directly generate and set tokens (without OTP)
+  const { accessToken, refreshToken } = await generateTokens(user, userType);
+  await updateRefreshToken(user.id, refreshToken, userType);
+
+  const cookieOptions = getCookieOptions();
 
   return res
     .status(200)
+    .cookie("accessToken", accessToken, cookieOptions)
+    .cookie("refreshToken", refreshToken, cookieOptions)
     .json(
-      new ApiResponse(200, profile, `${userType} profile fetched successfully`)
+      new ApiResponse(
+        200,
+        {
+          user: userWithoutPassword,
+          userType,
+          accessToken,
+          refreshToken,
+        },
+        `${userType === "employee" ? "Employee" : "Admin"} logged in successfully`
+      )
     );
+});
+
+
+// const universalLogin = asyncHandler(async (req, res) => {
+
+  
+//   const { email, password, userType } = req.body;
+    
+
+//   if (!email || !password || !userType) {
+//     throw new ApiError(
+//       400,
+//       "Email, password, and user type are required"
+//     );
+//   }
+
+//   if (!["admin", "employee"].includes(userType)) {
+//     throw new ApiError(400, "User type must be either 'admin' or 'employee'");
+//   }
+
+//   const isEmail = email.includes("@");
+//   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+ 
+
+//   if (isEmail && !emailRegex.test(email)) {
+//     throw new ApiError(400, "Invalid email format");
+//   }
+  
+//   let user = null;
+//   let foundUserType = null;
+
+//   try {
+//     if (userType === "admin") {
+      
+//       user = await prisma.admin.findFirst({
+//         where: { email:email },
+//         select: {
+//           id: true,
+//           name: true,
+//           email: true,
+//           mobileNo: true,
+//           password: true,
+//           companyId: true,
+//           company: {
+//             select: {
+//               id: true,
+//               name: true,
+//               industry: true,
+//             },
+//           },
+//         },
+//       });
+//       foundUserType = "admin";
+//     } else {
+      
+//       user = await prisma.employee.findFirst({
+//         where: {
+//           email:email,
+//           isActive: true,
+//         },
+//         select: {
+//           id: true,
+//           employeeCode: true,
+//           name: true,
+//           email: true,
+//           mobileNo: true,
+//           password: true,
+//           role: true,
+//           type: true,
+//           companyId: true,
+//           isActive: true,
+//           company: {
+//             select: {
+//               id: true,
+//               name: true,
+//               industry: true,
+//             },
+//           },
+//           department: {
+//             select: { name: true },
+//           },
+//           designation: {
+//             select: { name: true },
+//           },
+//         },
+//       });
+//       foundUserType = "employee";
+//     }
+
+//     if (!user) {
+//       throw new ApiError(
+//         404,
+//         `${userType} not found with provided credentials`
+//       );
+//     }
+
+//     const isPasswordValid = await validatePassword(password, user.password);
+//     if (!isPasswordValid) {
+//       throw new ApiError(401, "Invalid password");
+//     }
+
+//     const { password: _, ...userWithoutPassword } = user;
+
+//     return res.status(200).json(
+//       new ApiResponse(
+//         200,
+//         {
+//           user: userWithoutPassword,
+//           userType: foundUserType,
+//           requiresOTP: true,
+//           message: "Credentials verified. Please verify OTP to complete login.",
+//         },
+//         "Credentials verified successfully"
+//       )
+//     );
+//   } catch (error) {
+//     console.error("Universal login error:", error);
+//     throw new ApiError(500, "Login failed. Please try again.");
+//   }
+// });
+
+const getProfile = asyncHandler(async (req, res) => {
+  const userType = req.userType;
+  const userId = req.user.id;
+
+  if (userType === "admin") {
+    const profile = await prisma.admin.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        mobileNo: true,
+        companyId: true,
+      },
+    });
+    if (!profile) throw new ApiError(404, "Admin not found");
+    return res
+      .status(200)
+      .json(new ApiResponse(200, profile, "Profile fetched successfully"));
+  }
+
+  const employee = await prisma.employee.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      mobileNo: true,
+      salary: true,
+      role: true,
+      companyId: true,
+      profilePic:true,
+    },
+  });
+
+  if (!employee) throw new ApiError(404, "Employee not found");
+
+  const canSeeSalary = hasPermission(req.user.role, userType, "payroll:read");
+  if (!canSeeSalary) delete employee.salary;
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, employee, "Profile fetched successfully"));
 });
 
 const logoutHandler = asyncHandler(async (req, res) => {
@@ -693,6 +815,8 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
           {
             accessToken,
             refreshToken: newRefreshToken,
+            user,
+            userType
           },
           "Access token refreshed successfully"
         )
@@ -701,6 +825,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     throw new ApiError(401, error?.message || "Invalid refresh token");
   }
 });
+
 
 export {
   adminSignUp,

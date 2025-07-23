@@ -117,7 +117,7 @@ const verifyLoginOtp = asyncHandler(async (req, res) => {
           id: true,
           name: true,
           email: true,
-          mobile: true,
+          mobileNo: true,
           companyId: true,
           otp: true,
           otpExpiry: true,

@@ -45,9 +45,10 @@ const updateCompanyDetails = asyncHandler(async (req, res) => {
     throw new ApiError(401, "Company ID is required");
   }
 
-  if (!companyName || !industry || !address || !countryName || !stateName || !cityName) {
+  const requiredFields = [companyName, industry, address, countryName, stateName, cityName];
+if (requiredFields.some(field => !field?.trim())) {
     throw new ApiError(400, "All fields are required");
-  }
+}
 
   const existingCompany = await prisma.company.findFirst({
     where: {

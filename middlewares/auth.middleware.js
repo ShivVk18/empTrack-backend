@@ -48,7 +48,7 @@ const findUserById = async (userId, userType) => {
           name: true,
           email: true,
           companyId: true,
-          mobile: true,
+          mobileNo: true,
         },
       })
     }
@@ -103,6 +103,7 @@ const ROLE_PERMISSIONS = {
 
 
   HR: [
+    "company:read",
     "employee:read",
     "employee:manage",
     "employee:update:basic",
@@ -112,17 +113,15 @@ const ROLE_PERMISSIONS = {
     "payroll:manage",
     "payparameter:manage",
     "analytics:read",
-
+    
     "attendance:manage",
     "attendance:approve",
     "attendancePlan:manage",
     "attendancePlan:read",
 
-    "leavePolicy:manage",
-    "leavePolicy:read",
-    "leaveApplication:approve",
-    "leaveApplication:read",
-
+    "leave-policy:manage",
+    
+    "leave:manage",
     "complain:manage",
     "complain:read",
 
@@ -135,6 +134,7 @@ const ROLE_PERMISSIONS = {
 
 
   SR_MANAGER: [
+    "company:read",
     "employee:read",
     "employee:update:basic",
     "department:manage",
@@ -148,17 +148,18 @@ const ROLE_PERMISSIONS = {
     "attendance:approve",
     "attendancePlan:read",
 
-    "leavePolicy:read",
-    "leaveApplication:approve",
-    "leaveApplication:read",
+    
+    "leave:manage",
 
     "complain:read",
+    "complain:manage",
     "holiday:read",
     "notification:read",
   ],
 
 
   MANAGER: [
+    "company:read",
     "employee:read",
     
     "department:read",
@@ -169,22 +170,29 @@ const ROLE_PERMISSIONS = {
     "attendance:read",
     "attendancePlan:read",
 
-    "leavePolicy:read",
-    "leaveApplication:read",
-
+    
+    
+     
+    
     "complain:read",
+    "complain:manage",
     "holiday:read",
     "notification:read",
   ],
 
 
   ACCOUNTANT: [
+    "company:read",
     "employee:read",
     "employee:update:salary",
 
     "payroll:manage",
     "payparameter:manage",
     "analytics:read",
+    "holiday:read",
+    "attendance:clockin",
+    "attendance:clockout",
+    "attendance:read:own"
   ],
 
 
@@ -197,10 +205,10 @@ const ROLE_PERMISSIONS = {
     "attendance:clockin",
     "attendance:clockout",
 
-    "leaveApplication:apply",
-    "leaveApplication:cancel",
-    "leaveApplication:read:own",
-
+    
+    
+    "leave:apply",
+    "leave:view_own",
     "complain:raise",
     "complain:read:own",
 
@@ -297,7 +305,7 @@ const ensureCompanyAccess = asyncHandler(async (req, res, next) => {
   if (!userCompanyId) {
     throw new ApiError(401, "User company not found")
   }
-
+  
   next()
 })
 

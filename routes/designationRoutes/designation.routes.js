@@ -19,7 +19,7 @@ const router = express.Router();
 router.use(authenticate);
 router.use(ensureCompanyAccess);
 
-router.post("/addDesignation", requirePermission("designation:manage"), addDesignation);
+router.post("/", requirePermission("designation:manage"), addDesignation);
 router.get("/", requirePermission("designation:read"), getAllDesignationsByDepartment);
 router.get("/:id", requirePermission("designation:read"), getDesignationById);
 router.patch("/:id", requireManagerialRole, requirePermission("designation:manage"), updateDesignation);

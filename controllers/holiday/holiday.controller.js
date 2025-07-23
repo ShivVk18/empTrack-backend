@@ -1,7 +1,7 @@
-import { asyncHandler } from "../../utils/asyncHandler";
-import prisma from "../../config/prismaClient";
-import { ApiError } from "../../utils/ApiError";
-import { ApiResponse } from "../../utils/ApiResponse";
+import { asyncHandler } from "../../utils/asyncHandler.js";
+import prisma from "../../config/prismaClient.js";
+import { ApiError } from "../../utils/ApiError.js";
+import { ApiResponse } from "../../utils/ApiResponse.js";
 
 const createHoliday = asyncHandler(async (req, res) => {
   const companyId = req.user.companyId;
@@ -59,7 +59,7 @@ const getAllHoliday = asyncHandler(async(req,res)=>{
         where: filters,
         skip,
         take: Number(limit),
-        orderBy: { date: "asc" },
+        orderBy: { date: "desc" },
     });
 
     const totalRecord = await prisma.holiday.count({ where: filters });

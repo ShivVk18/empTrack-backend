@@ -467,7 +467,7 @@ const updateProfilePic = asyncHandler(async (req, res) => {
   const userType = req.userType;
 
   if (!employeeId) {
-    throw new ApiError(400, "Employee id is required");
+    throw new ApiError(400, "Employee ID is required");
   }
 
   if (userType === "employee" && currentUser.id !== employeeId) {
@@ -493,7 +493,7 @@ const updateProfilePic = asyncHandler(async (req, res) => {
     throw new ApiError(403, "Cannot update employee from different company");
   }
 
-  const profilePicPath = req.files?.profilePic?.[0].path;
+  const profilePicPath = req.file?.path;
   if (!profilePicPath) {
     throw new ApiError(400, "Profile picture is required");
   }
@@ -524,6 +524,7 @@ const updateProfilePic = asyncHandler(async (req, res) => {
       )
     );
 });
+
 
 const getEmployeeStats = asyncHandler(async (req, res) => {
   const companyId = req.user?.companyId;
@@ -593,11 +594,23 @@ const getEmployeeStats = asyncHandler(async (req, res) => {
   let salaryOverview = null;
   if (hasPermission(currentUser.role, userType, "payroll:read")) {
     const salaryData = await prisma.employee.aggregate({
-      where: { ...whereClause, isActive: true, salary: { not: null } },
-      _sum: { salary: true },
-      _avg: { salary: true },
-      _count: { salary: true },
-    });
+  where: {
+    ...whereClause,
+    isActive: true,
+    salary: {
+      gt:0 
+    },
+  },
+  _sum: {
+    salary: true,
+  },
+  _avg: {
+    salary: true,
+  },
+  _count: {
+    salary: true,
+  },
+});
 
     if (salaryData._count.salary > 0) {
       salaryOverview = {

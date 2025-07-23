@@ -47,18 +47,47 @@ const addDesignation = asyncHandler(async (req, res) => {
 const getAllDesignationsByDepartment = asyncHandler(async (req, res) => {
   const companyId = req.user?.companyId;
   const departmentId = Number.parseInt(req.query?.departmentId);
+  const page = Number.parseInt(req.query?.page) || 1;
+  const limit = Number.parseInt(req.query?.limit) || 10;
 
   if (!departmentId) {
     throw new ApiError(400, "departmentId is required in query");
   }
 
-  const designations = await prisma.designation.findMany({
-    where: { companyId, departmentId },
-    orderBy: { name: "asc" },
-  });
+  const skip = (page - 1) * limit;
 
-  return res.status(200).json(new ApiResponse(200, designations, "Designations fetched successfully"));
+  const [designations, totalCount] = await Promise.all([
+    prisma.designation.findMany({
+      where: { companyId, departmentId },
+      orderBy: { name: "asc" },
+      skip,
+      take: limit,
+    }),
+    prisma.designation.count({
+      where: { companyId, departmentId },
+    }),
+  ]);
+
+  const pagination = {
+    currentPage: page,
+    totalPages: Math.ceil(totalCount / limit),
+    totalCount,
+    hasNext: page * limit < totalCount,
+    hasPrev: page > 1,
+  };
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        designations,
+        pagination,
+      },
+      "Designations fetched successfully"
+    )
+  );
 });
+
 
 const getDesignationById = asyncHandler(async (req, res) => {
   const designationId = Number.parseInt(req.params?.id);
@@ -145,7 +174,7 @@ const updateDesignation = asyncHandler(async (req, res) => {
 const deleteDesignation = asyncHandler(async (req, res) => {
   const designationId = Number.parseInt(req.params?.id);
   const companyId = req.user?.companyId;
-
+  
   if (!designationId) {
     throw new ApiError(400, "Designation ID is required");
   }

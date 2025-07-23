@@ -7,6 +7,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// --- Enums ---
 enum EmployeeType {
   PERMANENT
   CONTRACT
@@ -22,7 +23,6 @@ enum EmployeeRole {
   MANAGER
   ACCOUNTANT
   SR_MANAGER
-  ADMIN
 }
 
 enum Gender {
@@ -73,32 +73,33 @@ enum ComplainStatus {
   REJECTED
 }
 
-model Company {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique
-  industry  Industry
-  address   String
-  countryName      String
-  stateName        String
-  cityName         String
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+// --- Models ---
 
-  
-  admin           Admin?
-  employees       Employee[]
-  departments     Department[]
-  designations    Designation[]
-  payParameters   PayParameter[]
-  payMasters      PayMaster[]
-  attendancePlans AttendancePlan[]
-  leavePolicies   LeavePolicy[]
-  holidays        Holiday[] 
-  notifications   Notification[]
-  complains       Complain[]
+model Company {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  industry    Industry
+  address     String
+  countryName String
+  stateName   String
+  cityName    String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  admin             Admin?
+  employees         Employee[]
+  departments       Department[]
+  designations      Designation[]
+  payParameters     PayParameter[]
+  payMasters        PayMaster[]
+  attendancePlans   AttendancePlan[]
+  leavePolicies     LeavePolicy[]
+  holidays          Holiday[]
+  notifications     Notification[]
+  complains         Complain[]
   leaveApplications LeaveApplication[]
-  attendances Attendance[]
+  attendances       Attendance[]
 }
 
 model Admin {
@@ -106,8 +107,8 @@ model Admin {
   name            String
   email           String    @unique
   password        String
-  countryCode String
-  mobileNo    String
+  countryCode     String
+  mobileNo        String
   companyId       Int       @unique
   refreshToken    String?
   otp             String?
@@ -117,41 +118,42 @@ model Admin {
   otpBlockedUntil DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
-  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  @@unique([countryCode,mobileNo])
+  @@unique([countryCode, mobileNo])
 }
 
 model Employee {
-  id               Int          @id @default(autoincrement())
-  employeeCode     String       @unique
-  name             String
-  email            String       @unique
-  countryCode String
-  mobileNo    String
-  password         String
-  salary           Float
-  gender           Gender
-  dob              DateTime
-  address1         String
-  address2         String?
-  type             EmployeeType
-  role             EmployeeRole @default(EMPLOYEE)
-  profilePic       String?
-  accountNo        String
-  pfAccountNo      String?
-  isActive         Boolean      @default(true)
-  refreshToken     String?
-  otp              String?
-  otpExpiry        DateTime?
-  isOtpVerified    Boolean      @default(false)
-  otpAttempts      Int          @default(0)
-  otpBlockedUntil  DateTime?
-  joinedAt         DateTime     @default(now())
-  leftAt           DateTime?
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+  id              Int          @id @default(autoincrement())
+  employeeCode    String       @unique
+  name            String
+  email           String       @unique
+  countryCode     String
+  mobileNo        String
+  password        String
+  salary          Float
+  gender          Gender
+  dob             DateTime
+  address1        String
+  address2        String?
+  type            EmployeeType
+  role            EmployeeRole @default(EMPLOYEE)
+  profilePic      String?
+  accountNo       String
+  pfAccountNo     String?
+  isActive        Boolean      @default(true)
+  refreshToken    String?
+  otp             String?
+  otpExpiry       DateTime?
+  isOtpVerified   Boolean      @default(false)
+  otpAttempts     Int          @default(0)
+  otpBlockedUntil DateTime?
+  joinedAt        DateTime     @default(now())
+  leftAt          DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
   companyId        Int
   departmentId     Int
   designationId    Int
@@ -173,137 +175,132 @@ model Employee {
   attendancePlan      AttendancePlan?    @relation(fields: [attendancePlanId], references: [id])
   approvedAttendances Attendance[]       @relation("AttendanceApprover")
 
-  @@unique([countryCode,mobileNo])
+  @@unique([countryCode, mobileNo])
 }
 
 model Department {
-  id            Int            @id @default(autoincrement())
-  name          String
-  code          String?
-  description   String?
-  companyId     Int
-  isActive      Boolean        @default(true)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employees     Employee[]
-  payParameters PayParameter[]
-  designations  Designation[]
+  id          Int      @id @default(autoincrement())
+  name        String
+  code        String?
+  description String?
+  companyId   Int
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employees    Employee[]
+  designations Designation[]
 
   @@unique([name, companyId])
 }
 
 model Designation {
-  id            Int            @id @default(autoincrement())
-  name          String
-  code          String?
-  description   String?
-  level         String?
-  companyId     Int
-  departmentId  Int
-  isActive      Boolean        @default(true)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  department    Department     @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  employees     Employee[]
-  payParameters PayParameter[]
+  id           Int      @id @default(autoincrement())
+  name         String
+  code         String?
+  description  String?
+  level        String?
+  companyId    Int
+  departmentId Int
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company    Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  employees  Employee[]
 
   @@unique([name, departmentId, companyId])
 }
 
 model PayParameter {
-  id                  Int          @id @default(autoincrement())
-  companyId           Int
-  departmentId        Int?
-  designationId       Int?
-  employeeType        EmployeeType
-  effectiveDate       DateTime     @default(now())
-  da                  Float        @default(0)
-  ta                  Float        @default(0)
-  hra                 Float        @default(0)
-  spall               Float        @default(0)
-  medicalAllRate      Float        @default(0)
-  medicalAllFixed     Float        @default(0)
-  epfRate             Float        @default(12.0)
-  esiRate             Float        @default(0.75)
-  tdsRate             Float        @default(0)
-  professionalTaxRate Float        @default(0)
-  esiSalaryLimit      Float        @default(25000)
-  epfSalaryLimit      Float        @default(15000)
+  id                       Int          @id @default(autoincrement())
+  companyId                Int
+  employeeType             EmployeeType
+  effectiveDate            DateTime     @default(now())
+  da                       Float        @default(0)
+  ta                       Float        @default(0)
+  hra                      Float        @default(0)
+  spall                    Float        @default(0)
+  medicalAllRate           Float        @default(0)
+  medicalAllFixed          Float        @default(0)
+  epfRate                  Float        @default(12.0)
+  esiRate                  Float        @default(0.75)
+  tdsRate                  Float        @default(0)
+  professionalTaxRate      Float        @default(0)
+  esiSalaryLimit           Float        @default(25000)
+  epfSalaryLimit           Float        @default(15000)
+  paidLeavePerMonth        Float        @default(1.0)
+  unpaidLeavePenaltyPerDay Float        @default(0)
+  createdAt                DateTime     @default(now())
+  updatedAt                DateTime     @updatedAt
 
-  paidLeavePerMonth        Float @default(1.0)
-  unpaidLeavePenaltyPerDay Float @default(0)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  department  Department?  @relation(fields: [departmentId], references: [id])
-  designation Designation? @relation(fields: [designationId], references: [id])
-
-  @@unique([companyId, departmentId, designationId, employeeType, effectiveDate])
+  @@unique([companyId, employeeType, effectiveDate])
 }
 
 model PayMaster {
-  id          Int   @id @default(autoincrement())
-  employeeId  Int
-  companyId   Int
-  month       Int
-  year        Int
-  da          Float
-  ta          Float
-  hra         Float
-  spall       Float
-  medicalAll  Float
-  otherAll    Float @default(0)
-  grossSalary Float
+  id                   Int       @id @default(autoincrement())
+  employeeId           Int
+  companyId            Int
+  month                Int
+  year                 Int
+  da                   Float
+  ta                   Float
+  hra                  Float
+  spall                Float
+  medicalAll           Float
+  otherAll             Float     @default(0)
+  grossSalary          Float
+  totalPaidLeaves      Float     @default(0)
+  totalUnpaidLeaves    Float     @default(0)
+  unpaidLeaveDeduction Float     @default(0)
+  epf                  Float
+  esi                  Float
+  tds                  Float
+  professionalTax      Float
+  otherDeductions      Float     @default(0)
+  totalDeductions      Float
+  netSalary            Float
+  remarks              String?
+  isProcessed          Boolean   @default(false)
+  processedAt          DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  totalPaidLeaves      Float @default(0)
-  totalUnpaidLeaves    Float @default(0)
-  unpaidLeaveDeduction Float @default(0)
-
-  epf             Float
-  esi             Float
-  tds             Float
-  professionalTax Float
-  otherDeductions Float     @default(0)
-  totalDeductions Float
-  netSalary       Float
-  remarks         String?
-  isProcessed     Boolean   @default(false)
-  processedAt     DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([employeeId, month, year])
 }
 
 model AttendancePlan {
-  id              Int        @id @default(autoincrement())
+  id              Int      @id @default(autoincrement())
   companyId       Int
   name            String
   description     String?
-  workingHours    Float      @default(8.0)
-  allowedLateMins Int        @default(0)
-  allowEarlyLeave Boolean    @default(false)
-  gracePeriodMins Int        @default(0)
-  requirePunchOut Boolean    @default(true)
-  isDefault       Boolean    @default(false)
-  shiftStartTime  String     @default("09:00")
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @default(now())
-  company         Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employees       Employee[]
+  workingHours    Float    @default(8.0)
+  allowedLateMins Int      @default(0)
+  allowEarlyLeave Boolean  @default(false)
+  gracePeriodMins Int      @default(0)
+  requirePunchOut Boolean  @default(true)
+  isDefault       Boolean  @default(false)
+  shiftStartTime  String   @default("09:00")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now())
+
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employees Employee[]
 
   @@unique([companyId, name])
 }
 
 model Attendance {
-   id           Int              @id @default(autoincrement())
+  id           Int              @id @default(autoincrement())
   employeeId   Int
-  companyId    Int              // 👈 Add this
+  companyId    Int
   date         DateTime         @db.Date
   status       AttendanceStatus
   inTime       DateTime?
@@ -315,9 +312,9 @@ model Attendance {
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
 
-  employee     Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  company      Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  approvedBy   Employee?        @relation("AttendanceApprover", fields: [approvedById], references: [id])
+  employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  approvedBy Employee? @relation("AttendanceApprover", fields: [approvedById], references: [id])
 
   @@unique([employeeId, date])
 }
@@ -330,26 +327,28 @@ model Holiday {
   isCompanySpecific Boolean  @default(true)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @default(now())
-  company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 model LeavePolicy {
-  id                  Int                @id @default(autoincrement())
+  id                  Int      @id @default(autoincrement())
   companyId           Int
   leaveType           String
   daysAllowed         Float
-  carryForward        Boolean            @default(false)
+  carryForward        Boolean  @default(false)
   maxCarryForwardDays Float?
-  isPaid              Boolean            @default(true)
-  isActive            Boolean            @default(true)
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
-  company             Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  leaveApplications   LeaveApplication[]
+  isPaid              Boolean  @default(true)
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  company           Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  leaveApplications LeaveApplication[]
 }
 
 model LeaveApplication {
-   id            Int                    @id @default(autoincrement())
+  id            Int                    @id @default(autoincrement())
   employeeId    Int
   companyId     Int
   leavePolicyId Int
@@ -362,24 +361,25 @@ model LeaveApplication {
   remarks       String?
   isHalfDay     Boolean                @default(false)
   session       String?
-  
-  employee      Employee               @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  leavePolicy   LeavePolicy            @relation(fields: [leavePolicyId], references: [id])
-  approvedBy    Employee?              @relation("LeaveApprover", fields: [approvedById], references: [id])
-  company       Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  employee    Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leavePolicy LeavePolicy @relation(fields: [leavePolicyId], references: [id])
+  approvedBy  Employee?   @relation("LeaveApprover", fields: [approvedById], references: [id])
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 model Notification {
-  id         Int       @id @default(autoincrement())
+  id         Int      @id @default(autoincrement())
   employeeId Int?
   companyId  Int?
   type       String
   message    String
   link       String?
-  seen       Boolean   @default(false)
-  createdAt  DateTime  @default(now())
-  employee   Employee? @relation(fields: [employeeId], references: [id])
-  company    Company?  @relation(fields: [companyId], references: [id])
+  seen       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  employee Employee? @relation(fields: [employeeId], references: [id])
+  company  Company?  @relation(fields: [companyId], references: [id])
 }
 
 model Complain {
@@ -392,6 +392,7 @@ model Complain {
   remarks     String?
   raisedAt    DateTime       @default(now())
   updatedAt   DateTime       @default(now())
-  employee    Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  company     Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }

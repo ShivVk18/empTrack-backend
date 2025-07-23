@@ -4,6 +4,7 @@ import {
   ensureCompanyAccess,
   requireAdminAccess,
   requireManagerialRole,
+  requirePermission,
 } from "../../middlewares/auth.middleware.js";
 import {
   deleteCompany,
@@ -16,10 +17,10 @@ const router = express.Router();
 router.use(authenticate);
 router.use(ensureCompanyAccess);
 
-router.get("/details", requireManagerialRole, getCompanyDetails);
 
-router.patch("/update", requireAdminAccess, updateCompanyDetails);
+router.get("/details", requireManagerialRole,requirePermission("company:read"), getCompanyDetails);
+router.patch("/update", requireAdminAccess,requirePermission("company:update"), updateCompanyDetails);
+router.delete("/delete", requireAdminAccess,requirePermission("company:delete"), deleteCompany);
 
-router.delete("/delete", requireAdminAccess, deleteCompany);
 
 export default router;

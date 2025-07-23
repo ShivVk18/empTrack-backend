@@ -19,7 +19,7 @@ const router = express.Router();
 router.use(authenticate);
 router.use(ensureCompanyAccess);
 
-router.post("/addDepartment", requirePermission("department:manage"), addDepartment);
+router.post("/", requirePermission("department:manage"), addDepartment);
 
 router.get("/", requirePermission("department:read"), getAllDepartments);
 

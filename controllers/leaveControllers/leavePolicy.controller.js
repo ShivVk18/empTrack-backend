@@ -1,7 +1,7 @@
-import { asyncHandler } from "../../utils/asyncHandler";
-import { ApiError } from "../../utils/ApiError";
-import { ApiResponse } from "../../utils/ApiResponse";
-import prisma from "../../config/prismaClient";
+import { asyncHandler } from "../../utils/asyncHandler.js";
+import { ApiError } from "../../utils/ApiError.js";
+import { ApiResponse } from "../../utils/ApiResponse.js";
+import prisma from "../../config/prismaClient.js";
 
 const createLeavePolicy = asyncHandler(async (req, res) => {
   const companyId = req.user.companyId;

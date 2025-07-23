@@ -114,7 +114,7 @@ const getDepartmentById = asyncHandler(async (req, res) => {
         orderBy: { name: "asc" },
       },
       _count: {
-        select: { employees: true, payParameters: true },
+        select: { employees: true, payParameters: true ,designations:true},
       },
     },
   });

@@ -23,27 +23,18 @@ import { upload } from "../../middlewares/multer.middleware.js";
 
 const router = express.Router();
 
-const publicRoutes = [
-  "/admin/signup",
-  "/login", 
-  "/otp/send",
-  "/otp/verify",
-  "/otp/resend"
-];
-
-
-
 router.post("/admin/signup", adminSignUp);
 router.post("/login", universalLogin);
-router.post("/otp/send", sendLoginOTP);
-router.post("/otp/verify", verifyLoginOtp);
-router.post("/otp/resend", resendOTP);
-
+// router.post("/otp/send", sendLoginOTP);
+// router.post("/otp/verify", verifyLoginOtp);
+// router.post("/otp/resend", resendOTP);
 router.post("/refresh-token", refreshAccessToken);
+
 
 router.use(authenticate);
 router.use(ensureCompanyAccess);
 
+// Employee Management
 router.post(
   "/employee/add",
   requirePermission("employee:manage"),
@@ -51,10 +42,8 @@ router.post(
   addEmployee
 ); 
 
+
 router.get("/profile", getProfile);
-
 router.post("/logout", logoutHandler);
-
 router.patch("/change-password", ensureSelfOrManagerialAccess, changePassword);
-
 export default router;
