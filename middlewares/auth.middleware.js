@@ -218,7 +218,8 @@ const ROLE_PERMISSIONS = {
 }
 
 const hasPermission = (userRole, userType, permission) => {
-
+   
+  
   if (userType === "admin") return true
 
   const rolePermissions = ROLE_PERMISSIONS[userRole] || []

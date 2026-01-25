@@ -75,9 +75,7 @@ const getAllLeavePolicy = asyncHandler(async (req, res) => {
   const userType = req.userType;
   const userRole = req.user.role;
 
-  if (userType !== "admin" && userRole !== "HR") {
-    throw new ApiError(403, "Only admin or HR can view leave policies");
-  }
+
 
   const { leaveType, isPaid, isActive, page = 1, limit = 10 } = req.query;
 
@@ -206,5 +204,30 @@ const updateLeavePolicy = asyncHandler(async (req, res) => {
     );
 });
 
+const getLeavePolicyById = asyncHandler(async (req, res) => {
+  const companyId = req.user.companyId;
+  const { leavePolicyId } = req.params;
 
-export {createLeavePolicy,updateLeavePolicy,getAllLeavePolicy,deleteLeavePolicy}
+  
+  if (!leavePolicyId || isNaN(leavePolicyId)) {
+    throw new ApiError(400, "Valid leavePolicyId is required");
+  }
+
+ 
+  const leavePolicy = await prisma.leavePolicy.findUnique({
+    where: {
+      id: Number(leavePolicyId),
+    },
+  });
+
+  
+  if (!leavePolicy || leavePolicy.companyId !== companyId) {
+    throw new ApiError(404, "Leave policy not found or access denied");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, leavePolicy, "Leave policy fetched successfully"));
+});
+
+export {createLeavePolicy,updateLeavePolicy,getAllLeavePolicy,deleteLeavePolicy,getLeavePolicyById }

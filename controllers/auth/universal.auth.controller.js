@@ -171,7 +171,7 @@ const uniqueCompanyName = asyncHandler(async (req, res) => {
 
 
 const addEmployee = asyncHandler(async (req, res) => {
-  console.log("👉 Add Employee API hit");
+  
 
   const {
     employeeCode,
@@ -195,17 +195,16 @@ const addEmployee = asyncHandler(async (req, res) => {
     bankCode,
     designationName,
     departmentName,
+    attendancePlanId
   } = req.body;
 
-  console.log("📦 Received Body:", req.body);
+ 
 
   const companyId = req.user?.companyId;
   const currentUser = req.user;
   const currentUserType = req.userType;
-
-  console.log("🏢 Company ID:", companyId);
-  console.log("👤 Current User:", currentUser);
-  console.log("👤 Current User Type:", currentUserType);
+  
+ 
 
   const requiredFields = [
     employeeCode,
@@ -226,19 +225,23 @@ const addEmployee = asyncHandler(async (req, res) => {
     bankCode,
     designationName,
     departmentName,
+   
   ];
 
   if (requiredFields.some((field) => !field?.toString().trim())) {
-    console.log("⚠️ Required fields missing");
+    
     throw new ApiError(400, "All required fields must be provided");
   }
+  
+
+
 
   if (role && ["HR", "MANAGER", "ACCOUNTANT", "SR_MANAGER"].includes(role)) {
     if (
       currentUserType !== "admin" &&
       !hasPermission(currentUser.role, currentUserType, "employee:manage")
     ) {
-      console.log("🚫 No permission to assign role:", role);
+     
       throw new ApiError(
         403,
         "You don't have permission to assign this role. Please contact an Admin."
@@ -246,13 +249,13 @@ const addEmployee = asyncHandler(async (req, res) => {
     }
 
     if (currentUser.role === "HR" && role === "SR_MANAGER") {
-      console.log("🚫 HR cannot assign SR_MANAGER role");
+      
       throw new ApiError(403, "HR cannot assign Senior Manager role");
     }
   }
 
   if (password.length < 8) {
-    console.log("🚫 Password too short");
+    
     throw new ApiError(400, "Password must be at least 8 characters long");
   }
 
@@ -290,9 +293,9 @@ const addEmployee = asyncHandler(async (req, res) => {
     );
   }
 
-  console.log("Checking Profile Picture...");
+ 
   const profilePicPath = req.file?.path;
-  console.log("Profile Pic Path:", profilePicPath);
+  
 
   if (!profilePicPath) {
     throw new ApiError(400, "Profile picture is required");
@@ -324,7 +327,21 @@ const addEmployee = asyncHandler(async (req, res) => {
   const hashedPassword = await hashPassword(password);
   const formattedMobileNumber = mobileNumber.number;
 
-  console.log("✅ Creating Employee in Database...");
+    let planId = attendancePlanId;
+  if (planId) {
+    const attendancePlan = await prisma.attendancePlan.findFirst({
+      where: { id: planId, companyId },
+    });
+    if (!attendancePlan) throw new ApiError(400, "Invalid attendance plan ID");
+  } else {
+    const defaultPlan = await prisma.attendancePlan.findFirst({
+      where: { companyId, isDefault: true },
+    });
+    if (!defaultPlan) throw new ApiError(400, "No default attendance plan found");
+    planId = defaultPlan.id;
+  }
+
+
   const employee = await prisma.employee.create({
     data: {
       employeeCode,
@@ -351,6 +368,7 @@ const addEmployee = asyncHandler(async (req, res) => {
       designationId: designation.id,
       companyId,
       isActive: true,
+      attendancePlanId:planId
     },
     select: {
       id: true,
@@ -370,6 +388,15 @@ const addEmployee = asyncHandler(async (req, res) => {
       countryName: true,
       stateName: true,
       cityName: true,
+      attendancePlanId:true,
+      attendancePlan:{
+         select:{name:true,description:true}
+      },
+      attendances:{
+        select:{
+            date:true
+        }
+      }
     },
   });
 

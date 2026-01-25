@@ -4,7 +4,6 @@ import { ApiResponse } from "../../utils/ApiResponse.js";
 import prisma from "../../config/prismaClient.js";
 import dayjs from "dayjs";
 
-
 const clockIn = asyncHandler(async (req, res) => {
   const userId = req.user.id;
   const companyId = req.user.companyId;
@@ -19,13 +18,36 @@ const clockIn = asyncHandler(async (req, res) => {
     where: {
       employeeId_date: {
         employeeId: userId,
-        date: today
-      }
-    }
+        date: today,
+      },
+    },
   });
 
   if (existingAttendance) {
     throw new ApiError(400, "Already clocked in for today");
+  }
+
+  const employee = await prisma.employee.findUnique({
+    where: { id: userId },
+    include: { attendancePlan: true },
+  });
+
+  if (!employee || !employee.attendancePlan) {
+    throw new ApiError(400, "Attendance plan not assigned");
+  }
+
+  const now = dayjs();
+  const shiftStart = dayjs(
+    `${now.format("YYYY-MM-DD")}T${employee.attendancePlan.shiftStartTime}`
+  );
+  const graceLimit = shiftStart.add(
+    employee.attendancePlan.gracePeriodMins || 0,
+    "minute"
+  );
+
+  let status = "PRESENT";
+  if (now.isAfter(graceLimit)) {
+    status = "LATE";
   }
 
   const newAttendance = await prisma.attendance.create({
@@ -33,11 +55,11 @@ const clockIn = asyncHandler(async (req, res) => {
       employeeId: userId,
       companyId,
       date: today,
-      inTime: new Date(),
-      status: "PRESENT",
+      inTime: now.toDate(),
+      status,
       isApproved: true,
-      approvedById: userId
-    }
+      approvedById: userId,
+    },
   });
 
   return res
@@ -54,38 +76,59 @@ const clockOut = asyncHandler(async (req, res) => {
 
   const today = dayjs().startOf("day").toDate();
 
-  const existingAttendance = await prisma.attendance.findUnique({
+  const attendance = await prisma.attendance.findUnique({
     where: {
       employeeId_date: {
         employeeId: userId,
-        date: today
-      }
-    }
+        date: today,
+      },
+    },
+    include: {
+      employee: {
+        include: { attendancePlan: true },
+      },
+    },
   });
 
-  if (!existingAttendance) {
+  if (!attendance) {
     throw new ApiError(400, "Please clock in first");
   }
 
-  if (existingAttendance.outTime) {
+  if (attendance.outTime) {
     throw new ApiError(400, "Already clocked out for today");
   }
 
   const now = dayjs();
-  const inTime = dayjs(existingAttendance.inTime);
+  const inTime = dayjs(attendance.inTime);
 
-  const totalHours = now.diff(inTime, "minute") / 60;
+  const totalMinutes = now.diff(inTime, "minute");
+  const totalHours = parseFloat((totalMinutes / 60).toFixed(2));
 
   if (totalHours <= 0) {
     throw new ApiError(400, "Clock-out time cannot be before clock-in time");
   }
 
+  const { attendancePlan } = attendance.employee;
+
+  let finalStatus = attendance.status;
+
+  // Check if punch out is required
+  if (attendancePlan.requirePunchOut) {
+    const requiredHours = parseFloat(attendancePlan.workingHours);
+    if (totalHours < requiredHours) {
+      finalStatus = "EARLY_LEAVE";
+    } else if (finalStatus !== "LATE") {
+      finalStatus = "PRESENT";
+    }
+  }
+
   const updatedAttendance = await prisma.attendance.update({
-    where: { id: existingAttendance.id },
+    where: { id: attendance.id },
     data: {
       outTime: now.toDate(),
-      totalHours: parseFloat(totalHours.toFixed(2))
-    }
+      totalHours,
+      status: finalStatus,
+    },
   });
 
   return res
@@ -93,74 +136,96 @@ const clockOut = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, updatedAttendance, "Clock-out successful"));
 });
 
-
 const getAllAttendance = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10, status, employeeId, date } = req.query;
-  const skip = (page - 1) * limit;
+  const { companyId } = req.user;
+  const { from, to, employeeId, page = 1, limit = 20 } = req.query;
 
-  if (isNaN(page) || isNaN(limit)) {
-    throw new ApiError(400, "Page and limit must be numbers");
+  if (req.userType !== "admin" && !["HR", "MANAGER"].includes(req.user.role)) {
+    throw new ApiError(
+      403,
+      "Only Admin, HR and Manager can access all attendance records"
+    );
   }
 
   const filters = {
-    companyId: req.user.companyId
+    companyId,
+    ...(employeeId && { employeeId: Number(employeeId) }),
+    ...(from &&
+      to && {
+        date: {
+          gte: new Date(from),
+          lte: new Date(to),
+        },
+      }),
   };
 
-  if (status) filters.status = status;
-  if (employeeId) filters.employeeId = +employeeId;
-  if (date) {
-    const filterDate = dayjs(date).startOf("day").toDate();
-    filters.date = filterDate;
-  }
-
-  const [attendances, total] = await Promise.all([
+  const [attendances, totalCount] = await Promise.all([
     prisma.attendance.findMany({
       where: filters,
-      skip: +skip,
-      take: +limit,
       orderBy: { date: "desc" },
-      include: { employee: true }
+      include: {
+        employee: {
+          select: {
+            id: true,
+            name: true,
+            employeeCode: true,
+            department: { select: { name: true } },
+            designation: { select: { name: true } },
+          },
+        },
+      },
+      skip: (page - 1) * limit,
+      take: Number(limit),
     }),
-    prisma.attendance.count({ where: filters })
+    prisma.attendance.count({ where: filters }),
   ]);
 
-  return res
+  res
     .status(200)
-    .json(new ApiResponse(200, { attendances, total }, "Attendance fetched"));
+    .json(
+      new ApiResponse(
+        200,
+        { attendances, totalCount, page, limit },
+        "Attendance fetched successfully"
+      )
+    );
 });
-
 
 const getOwnAttendance = asyncHandler(async (req, res) => {
-  const userId = req.user.id;
-  const { startDate, endDate } = req.query;
+  const { id: employeeId, companyId } = req.user;
+  const { from, to, page = 1, limit = 20 } = req.query;
 
-  if (!startDate || !endDate) {
-    throw new ApiError(400, "startDate and endDate are required");
-  }
+  const filters = {
+    companyId,
+    employeeId,
+    ...(from &&
+      to && {
+        date: {
+          gte: new Date(from),
+          lte: new Date(to),
+        },
+      }),
+  };
 
-  const start = dayjs(startDate).startOf("day");
-  const end = dayjs(endDate).endOf("day");
+  const [attendances, totalCount] = await Promise.all([
+    prisma.attendance.findMany({
+      where: filters,
+      orderBy: { date: "desc" },
+      skip: (page - 1) * limit,
+      take: Number(limit),
+    }),
+    prisma.attendance.count({ where: filters }),
+  ]);
 
-  if (!start.isValid() || !end.isValid()) {
-    throw new ApiError(400, "Invalid date format");
-  }
-
-  const attendances = await prisma.attendance.findMany({
-    where: {
-      employeeId: userId,
-      companyId: req.user.companyId,
-      date: {
-        gte: start.toDate(),
-        lte: end.toDate()
-      }
-    },
-    orderBy: { date: "asc" }
-  });
-
-  return res
+  res
     .status(200)
-    .json(new ApiResponse(200, attendances, "Attendance fetched"));
+    .json(
+      new ApiResponse(
+        200,
+        { attendances, totalCount, page, limit },
+        "Your attendance fetched successfully"
+      )
+    );
 });
 
-
-export {clockIn,clockOut,getAllAttendance,getOwnAttendance}  
+export { clockIn, clockOut, getAllAttendance, getOwnAttendance };

@@ -55,31 +55,40 @@ const applyLeave = asyncHandler(async (req, res) => {
   }
 
   const newLeave = await prisma.leaveApplication.create({
-    data: {
-      employeeId: userId,
-      leavePolicyId,
-      fromDate: from.toDate(),
-      toDate: to.toDate(),
-      reason,
-      status: "PENDING",
-      appliedAt: new Date(),
-      isHalfDay: isHalfDay || false,
-      session: isHalfDay ? session : null
+  data: {
+    fromDate: from.toDate(),
+    toDate: to.toDate(),
+    reason,
+    
+    status: "PENDING",
+    appliedAt: new Date(),
+    isHalfDay: isHalfDay || false,
+    session: isHalfDay ? session : null,
+    employee: {
+      connect: { id: userId },  
+    },
+    leavePolicy: {
+      connect: { id: Number(leavePolicyId) }, 
+    },
+    company: {
+      connect: { id: companyId }, // 👈 put the companyId that exists
     }
-  });
+  },
+});
+
 
   return res
     .status(201)
     .json(new ApiResponse(201, newLeave, "Leave applied successfully"));
 });
 
- const updateLeaveStatus = asyncHandler(async (req, res) => {
+const updateLeaveStatus = asyncHandler(async (req, res) => {
   const userId = req.user.id;
   const companyId = req.user.companyId;
   const userRole = req.user.role;
-  const userType = req.user.userType;
+  const userType = req.userType;
 
-  if (userType === "employee" || !["HR", "SR_MANAGER"].includes(userRole)) {
+  if (userType !== "admin" && !["HR", "MANAGER", "SR_MANAGER"].includes(userRole)) {
     throw new ApiError(403, "You are not authorized to approve, reject, or cancel leave");
   }
 
@@ -112,13 +121,24 @@ const applyLeave = asyncHandler(async (req, res) => {
     );
   }
 
+  
+
+ 
+
+
+  const updateData = {
+    status,
+    remarks: remarks || null
+  };
+
+
+  if (status === "APPROVED") {
+    updateData.approvedById = userId;
+  }
+
   const updatedLeave = await prisma.leaveApplication.update({
     where: { id: leaveApplication.id },
-    data: {
-      status,
-      approvedById: userId,
-      remarks: remarks || null
-    },
+    data: updateData,
     include: {
       approvedBy: {
         select: { id: true, name: true }
@@ -142,19 +162,23 @@ const getAllLeaveApplications = asyncHandler(async (req, res) => {
   const userType = req.userType;
   const userRole = req.user.role;
 
-  if (userType === 'employee' || !["ADMIN", "HR", "SR_MANAGER"].includes(userRole)) {
-    throw new ApiError(403, "You are not authorized to view leave applications");
+  if (userType !== "admin" && !["HR", "MANAGER", "SR_MANAGER"].includes(userRole)) {
+    throw new ApiError(403, "Access denied");
   }
 
   const { status, employeeCode, fromDate, toDate, page = 1, limit = 10 } = req.query;
   const skip = (page - 1) * limit;
 
+  // Fix: Use companyId directly, not as an object
   const whereClause = {
-    employee: { companyId },
+    companyId: companyId, // or simply: companyId (shorthand)
   };
 
+  // Fix: Handle employeeCode filter properly with nested relation
   if (employeeCode) {
-    whereClause.employee.employeeCode = employeeCode;
+    whereClause.employee = {
+      employeeCode: employeeCode
+    };
   }
 
   if (status) {
@@ -168,7 +192,7 @@ const getAllLeaveApplications = asyncHandler(async (req, res) => {
     ];
   }
 
-  const [total, leaveApplications] = await Promise.all([
+  const [totalRecords, leaveApplications] = await Promise.all([
     prisma.leaveApplication.count({ where: whereClause }),
     prisma.leaveApplication.findMany({
       where: whereClause,
@@ -184,14 +208,19 @@ const getAllLeaveApplications = asyncHandler(async (req, res) => {
   ]);
 
   return res.status(200).json(
-    new ApiResponse(200, { total, page: Number(page), limit: Number(limit), leaveApplications }, "Leave applications fetched")
+    new ApiResponse(200, { 
+      totalRecords,  
+      totalPages: Math.ceil(totalRecords / limit),
+      currentPage: Number(page), 
+      records: leaveApplications 
+    }, "Leave applications fetched")
   );
 });
 
 const getMyLeaveApplications = asyncHandler(async (req, res) => {
   const companyId = req.user.companyId;
   const employeeCode = req.user.employeeCode;
-
+   
   const { status, fromDate, toDate, page = 1, limit = 10 } = req.query;
   const skip = (page - 1) * limit;
 
@@ -210,7 +239,7 @@ const getMyLeaveApplications = asyncHandler(async (req, res) => {
     ];
   }
 
-  const [total, leaveApplications] = await Promise.all([
+  const [totalRecords, leaveApplications] = await Promise.all([
     prisma.leaveApplication.count({ where: whereClause }),
     prisma.leaveApplication.findMany({
       where: whereClause,
@@ -225,9 +254,11 @@ const getMyLeaveApplications = asyncHandler(async (req, res) => {
   ]);
 
   return res.status(200).json(
-    new ApiResponse(200, { total, page: Number(page), limit: Number(limit), leaveApplications }, "Your leave applications fetched")
+    new ApiResponse(200, { totalRecords,  totalPages: Math.ceil(totalRecords / limit),
+        currentPage: Number(page), records:leaveApplications }, "Your leave applications fetched")
   );
 });
+
 
 export {applyLeave,updateLeaveStatus,getAllLeaveApplications,getMyLeaveApplications}
  

@@ -40,6 +40,19 @@ const createAttendancePlan = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Attendance Plan with same name already exists");
   }
 
+  if (isDefault) {
+ 
+  await prisma.attendancePlan.updateMany({
+    where: {
+      companyId,
+      isDefault: true,
+    },
+    data: {
+      isDefault: false,
+    },
+  });
+}
+
   const newPlan = await prisma.attendancePlan.create({
     data: {
       companyId,
@@ -123,6 +136,22 @@ const updateAttendancePlan = asyncHandler(async (req, res) => {
       throw new ApiError(400, "Another Attendance Plan with same name already exists");
     }
   }
+  
+   if (updateData.isDefault === true) {
+  
+  await prisma.attendancePlan.updateMany({
+    where: {
+      companyId,
+      isDefault: true,
+      NOT: {
+        id: Number(planId),
+      },
+    },
+    data: {
+      isDefault: false,
+    },
+  });
+}
 
   const updatedPlan = await prisma.attendancePlan.update({
     where: { id: Number(planId) },
@@ -132,6 +161,35 @@ const updateAttendancePlan = asyncHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, updatedPlan, "Attendance Plan updated successfully"));
 });
 
+const getAttendancePlanById = asyncHandler(async (req, res) => {
+  const companyId = req.user?.companyId;
+  const { planId } = req.params;
+
+  
+  if (!planId || isNaN(Number(planId))) {
+    throw new ApiError(400, "Invalid plan ID");
+  }
+
+  
+  const attendancePlan = await prisma.attendancePlan.findUnique({
+    where: {
+      id: Number(planId),
+    },
+  });
+
+  
+  if (!attendancePlan) {
+    throw new ApiError(404, "Attendance Plan not found");
+  }
+
+  if (attendancePlan.companyId !== companyId) {
+    throw new ApiError(403, "Unauthorized access to attendance plan");
+  }
+
+  return res.status(200).json(
+    new ApiResponse(200, attendancePlan, "Attendance Plan fetched successfully")
+  );
+});
 
 const deleteAttendancePlan = asyncHandler(async (req, res) => {
   const companyId = req.user.companyId;
@@ -159,4 +217,4 @@ const deleteAttendancePlan = asyncHandler(async (req, res) => {
 });
 
 
-export {createAttendancePlan,deleteAttendancePlan,getAllAttendancePlans,updateAttendancePlan}
+export {createAttendancePlan,deleteAttendancePlan,getAllAttendancePlans,updateAttendancePlan,getAttendancePlanById}

@@ -112,7 +112,7 @@ const getDesignationById = asyncHandler(async (req, res) => {
         },
         orderBy: { name: "asc" },
       },
-      _count: { select: { employees: true, payParameters: true } },
+      _count: { select: { employees: true} },
     },
   });
 

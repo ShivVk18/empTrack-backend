@@ -53,7 +53,7 @@ const getAllDepartments = asyncHandler(async (req, res) => {
 
   if (includeStats === "true") {
     queryOptions.include._count = {
-      select: { employees: true, payParameters: true },
+      select: { employees: true },
     };
   }
 
@@ -114,7 +114,7 @@ const getDepartmentById = asyncHandler(async (req, res) => {
         orderBy: { name: "asc" },
       },
       _count: {
-        select: { employees: true, payParameters: true ,designations:true},
+        select: { employees: true, designations:true},
       },
     },
   });

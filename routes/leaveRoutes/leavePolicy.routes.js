@@ -4,6 +4,7 @@ import {
   updateLeavePolicy,
   getAllLeavePolicy,
   deleteLeavePolicy,
+  getLeavePolicyById,
 } from "../../controllers/leaveControllers/leavePolicy.controller.js";
 
 import {
@@ -27,18 +28,23 @@ router.post(
 
 router.get(
   "/",
-  requirePermission("leave-policy:manage"),
   getAllLeavePolicy
-);
+);  
 
-// 🟢 Update Leave Policy - Only Admin or HR (permission: "leave-policy:manage")
-router.put(
+router.get(
+     "/:leavePolicyId",
+ 
+  getLeavePolicyById
+)
+
+
+router.patch(
   "/:leavePolicyId",
   requirePermission("leave-policy:manage"),
   updateLeavePolicy
 );
 
-// 🟢 Delete Leave Policy - Only Admin or HR (permission: "leave-policy:manage")
+
 router.delete(
   "/:leavePolicyId",
   requirePermission("leave-policy:manage"),

@@ -153,13 +153,27 @@ const getOwnComplaints = asyncHandler(async (req, res) => {
     throw new ApiError(403, "Only employees can view their complaints");
   }
 
+  const { page = 1, limit = 10 } = req.query;
+  const skip = (Number(page) - 1) * Number(limit);
+
   const complaints = await prisma.complain.findMany({
     where: { employeeId: userId },
     orderBy: { raisedAt: "desc" },
+    skip,
+    take: Number(limit),
+  });
+
+  const totalRecords = await prisma.complain.count({
+    where: { employeeId: userId },
   });
 
   return res.status(200).json(
-    new ApiResponse(200, complaints, "Complaints fetched successfully")
+    new ApiResponse(200, {
+      totalRecords,
+      totalPages: Math.ceil(totalRecords / limit),
+      currentPage: Number(page),
+      records: complaints,
+    }, "Complaints fetched successfully")
   );
 });
 

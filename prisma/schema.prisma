@@ -248,6 +248,7 @@ model PayMaster {
   month                Int
   year                 Int
   da                   Float
+  basicSalary          Float     
   ta                   Float
   hra                  Float
   spall                Float

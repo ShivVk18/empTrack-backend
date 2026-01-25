@@ -15,6 +15,9 @@ const generateSalary = asyncHandler(async (req, res) => {
   const { companyId, role, departmentId, name } = req.user
   const { userType } = req
 
+  console.log("[DEBUG] Generate salary request:", { month, year, employeeType, departmentIds, employeeIds })
+  console.log("[DEBUG] User context:", { companyId, role, departmentId, userType })
+
   if (!hasPermission(role, userType, "payroll:generate")) {
     throw new ApiError(403, "Insufficient permissions to generate payroll")
   }
@@ -28,6 +31,9 @@ const generateSalary = asyncHandler(async (req, res) => {
   if (employeeIds?.length) filter.id = { in: employeeIds.map(Number) }
   if (role === "MANAGER" && userType === "employee") filter.departmentId = departmentId
 
+  console.log("[DEBUG] Employee filter:", JSON.stringify(filter, null, 2))
+
+  // Check for existing records
   const existing = await prisma.payMaster.count({
     where: {
       companyId,
@@ -43,35 +49,90 @@ const generateSalary = asyncHandler(async (req, res) => {
     },
   })
 
+  console.log("[DEBUG] Existing payroll count:", existing)
+
   if (existing) {
     throw new ApiError(400, `Salaries for ${month}/${year} already generated. Use update instead.`)
   }
 
+  // Fetch employees
   const employees = await prisma.employee.findMany({
     where: filter,
     include: { department: true, designation: true },
   })
 
+  console.log("[DEBUG] Found employees:", employees.length)
+  console.log("[DEBUG] Employee details:", employees.map(e => ({
+    id: e.id,
+    code: e.employeeCode,
+    name: e.name,
+    type: e.type,
+    salary: e.salary,
+    isActive: e.isActive
+  })))
+
   if (!employees.length) throw new ApiError(404, "No eligible employees found")
 
+  // Check pay parameters BEFORE transaction
+  const employeeTypes = [...new Set(employees.map(e => e.type))]
+  console.log("[DEBUG] Unique employee types:", employeeTypes)
+
+  for (const empType of employeeTypes) {
+    const payParam = await prisma.payParameter.findFirst({
+      where: { companyId, employeeType: empType },
+      orderBy: { effectiveDate: "desc" },
+    })
+    console.log(`[DEBUG] Pay parameter for ${empType}:`, payParam ? "Found" : "MISSING")
+    if (payParam) {
+      console.log(`[DEBUG] ${empType} pay param details:`, {
+        id: payParam.id,
+        effectiveDate: payParam.effectiveDate,
+        daPercentage: payParam.daPercentage,
+        hraPercentage: payParam.hraPercentage
+      })
+    }
+  }
+
   const { salaryRecords, errors } = await prisma.$transaction(async (tx) => {
-    const records = [],
-      errs = []
+    const records = []
+    const errs = []
 
     for (const emp of employees) {
       try {
-        if (!emp.salary || emp.salary <= 0) throw new Error("Invalid basic salary")
+        console.log(`[DEBUG] Processing employee: ${emp.employeeCode} (${emp.name})`)
+        
+        // Validate basic salary
+        if (!emp.salary || emp.salary <= 0) {
+          const msg = `Invalid basic salary: ${emp.salary}`
+          console.error(`[DEBUG] ${emp.employeeCode}: ${msg}`)
+          throw new Error(msg)
+        }
 
-        // Simplified: Get most recent pay parameter for employee type
+        console.log(`[DEBUG] ${emp.employeeCode}: Basic salary is ${emp.salary}`)
+
+        // Get pay parameter
         const payParam = await tx.payParameter.findFirst({
           where: { companyId, employeeType: emp.type },
           orderBy: { effectiveDate: "desc" },
         })
 
-        if (!payParam) throw new Error("Missing pay parameters")
+        if (!payParam) {
+          const msg = `Missing pay parameters for employee type: ${emp.type}`
+          console.error(`[DEBUG] ${emp.employeeCode}: ${msg}`)
+          throw new Error(msg)
+        }
 
+        console.log(`[DEBUG] ${emp.employeeCode}: Using pay param ID ${payParam.id}`)
+
+        // Calculate components
         const components = calculateSalaryComponents(emp.salary, payParam, emp.type)
+        console.log(`[DEBUG] ${emp.employeeCode}: Calculated components:`, {
+          basicSalary: components.basicSalary,
+          grossSalary: components.grossSalary,
+          netSalary: components.netSalary
+        })
 
+        // Create record
         const record = await tx.payMaster.create({
           data: {
             employeeId: emp.id,
@@ -97,22 +158,38 @@ const generateSalary = asyncHandler(async (req, res) => {
           },
         })
 
+        console.log(`[DEBUG] ${emp.employeeCode}: Record created successfully with ID ${record.id}`)
         records.push(record)
       } catch (err) {
-        errs.push(`Employee ${emp.employeeCode}: ${err.message}`)
+        const errorMsg = `Employee ${emp.employeeCode}: ${err.message}`
+        console.error(`[DEBUG] ERROR: ${errorMsg}`)
+        console.error(`[DEBUG] Stack trace:`, err.stack)
+        errs.push(errorMsg)
       }
     }
 
+    console.log(`[DEBUG] Transaction complete. Success: ${records.length}, Errors: ${errs.length}`)
     return { salaryRecords: records, errors: errs }
   })
 
-  // Send emails (unchanged)
+  // Send emails
   for (const rec of salaryRecords) {
     if (!rec.employee.email) continue
-    await sendBulkEmail([{ email: rec.employee.email, name: rec.employee.name }], "payslip", rec)
+    try {
+      await sendBulkEmail([{ email: rec.employee.email, name: rec.employee.name }], "payslip", rec)
+    } catch (emailErr) {
+      console.error(`[DEBUG] Email failed for ${rec.employee.email}:`, emailErr.message)
+    }
   }
 
-  if (!salaryRecords.length) throw new ApiError(400, "No salaries generated. Check configuration.")
+  if (!salaryRecords.length) {
+    console.error("[DEBUG] CRITICAL: No salaries generated!")
+    console.error("[DEBUG] All errors:", errors)
+    throw new ApiError(
+      400, 
+      `No salaries generated. Errors: ${errors.slice(0, 3).join("; ")}${errors.length > 3 ? "..." : ""}`
+    )
+  }
 
   const summary = salaryRecords.reduce((acc, s) => {
     acc[s.employee.type] = acc[s.employee.type] || { count: 0, total: 0 }
@@ -120,6 +197,12 @@ const generateSalary = asyncHandler(async (req, res) => {
     acc[s.employee.type].total += Number(s.netSalary)
     return acc
   }, {})
+
+  console.log("[DEBUG] Payroll generation successful:", {
+    totalGenerated: salaryRecords.length,
+    totalErrors: errors.length,
+    summary
+  })
 
   res.status(201).json(
     new ApiResponse(
@@ -224,7 +307,11 @@ const getEmployeeSalaries = asyncHandler(async (req, res) => {
 const updateSalary = asyncHandler(async (req, res) => {
   const { payMasterId } = req.params
   const { otherAll, otherDeductions, remarks, basicSalary } = req.body
-  const { companyId, role, departmentId, userType } = req.user
+  const { companyId, role, departmentId} = req.user
+   const { userType } = req 
+
+   
+  console.log(hasPermission(role, userType, "payroll:update"))
 
   if (!hasPermission(role, userType, "payroll:update")) throw new ApiError(403, "Insufficient permissions")
 
@@ -242,7 +329,6 @@ const updateSalary = asyncHandler(async (req, res) => {
 
   let updated = {}
   if (basicSalary !== undefined) {
-    // Get most recent pay parameter for employee type
     const payParam = await prisma.payParameter.findFirst({
       where: { companyId, employeeType: record.employee.type },
       orderBy: { effectiveDate: "desc" },
@@ -285,4 +371,5 @@ const updateSalary = asyncHandler(async (req, res) => {
 
   res.json(new ApiResponse(200, updatedRecord, "Salary updated successfully"))
 })
+
 export { generateSalary, getEmployeeSalaries, updateSalary };

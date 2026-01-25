@@ -4,6 +4,7 @@ import {
   deleteAttendancePlan,
   getAllAttendancePlans,
   updateAttendancePlan,
+  getAttendancePlanById
 } from "../../controllers/attendance/attendancePlan.controller.js";
 import {
   authenticate,
@@ -31,10 +32,19 @@ router.post(
   createAttendancePlan
 );
 
+
+
 router.patch(
   "/:planId",
   requirePermission("attendancePlan:manage"),
   updateAttendancePlan
+);
+ 
+router.get(
+  "/:planId",
+  requireManagerialRole,
+  requirePermission("attendancePlan:read"),
+  getAttendancePlanById
 );
 
 router.delete(
