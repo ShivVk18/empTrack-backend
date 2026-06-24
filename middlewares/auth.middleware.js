@@ -205,7 +205,7 @@ const ROLE_PERMISSIONS = {
     "attendance:clockin",
     "attendance:clockout",
 
-    
+    "payroll:read",
     
     "leave:apply",
     "leave:view_own",

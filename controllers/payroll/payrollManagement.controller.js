@@ -372,4 +372,88 @@ const updateSalary = asyncHandler(async (req, res) => {
   res.json(new ApiResponse(200, updatedRecord, "Salary updated successfully"))
 })
 
-export { generateSalary, getEmployeeSalaries, updateSalary };
+
+const getEmployeeSalaryById = asyncHandler(async(req,res) => {
+     const {paymasterId} = req.params 
+
+     const {companyId, role, departmentId} = req.user 
+     const {userType} = req 
+
+     if(!hasPermission(role,userType,"payroll:read")) throw new ApiError(403,"Insufficient permissions")
+
+      const record = await prisma.payMaster.findFirst({
+         where: {
+            id:Number(paymasterId),
+            companyId:companyId
+         },
+         include:{ 
+           employee: {
+      select: {
+        id: true,
+        employeeCode: true,
+        name: true,
+        email: true,
+        gender: true,
+        dob: true,
+        salary: true,
+        role: true,
+        type: true,
+        profilePic: true,
+        accountNo: true,
+        bankCode: true,
+        isActive: true,
+        joinedAt: true,
+        departmentId: true,
+        designationId: true,
+      },
+    },
+         }
+      })
+
+      if(!record) throw new ApiError(404,"Salary record not found") 
+      
+      return res.json(new ApiResponse(200,record,"Salary record fetched successfully"))
+}) 
+
+const getOwnSalary = asyncHandler(async(req,res) => {
+  const {companyId, id:employeeId} = req.user 
+  const {paymasterId} = req.params
+  const {userType} = req 
+
+  if(userType !== "employee") throw new ApiError(403,"Only employees can access their own salary") 
+
+const record = await prisma.payMaster.findFirst({
+  where: {
+    id: Number(paymasterId),
+    companyId: companyId,
+    employeeId: employeeId,
+  },
+  include: {
+    company: true,
+    employee: {
+      select: {
+        id: true,
+        employeeCode: true,
+        name: true,
+        email: true,
+        gender: true,
+        dob: true,
+        salary: true,
+        role: true,
+        type: true,
+        profilePic: true,
+        accountNo: true,
+        bankCode: true,
+        isActive: true,
+        joinedAt: true,
+        departmentId: true,
+        designationId: true,
+      },
+    },
+  },
+});
+
+  if(!record) throw new ApiError(404,"Salary record not found")
+    return res.json(new ApiResponse(200,record,"Salary record fetched successfully"))
+})
+export { generateSalary, getEmployeeSalaries, updateSalary,getEmployeeSalaryById,getOwnSalary };

@@ -10,6 +10,8 @@ import {
 import {
   generateSalary,
   getEmployeeSalaries,
+  getEmployeeSalaryById,
+  getOwnSalary,
   updateSalary,
 } from "../../controllers/payroll/payrollManagement.controller.js";
 import {
@@ -36,8 +38,9 @@ router.delete("/parameters/:id", requireSeniorRole, requireFinancialRole, requir
 
 router.post("/salaries/generate", requireFinancialRole, requirePermission("payroll:manage"), generateSalary);
 router.get("/salaries", requirePermission("payroll:read"), getEmployeeSalaries);
+router.get("/salaries/:paymasterId", requirePermission("payroll:read"), getEmployeeSalaryById);
+router.get("/salaries/own/:paymasterId", requirePermission("payroll:read:own"), getOwnSalary);
 router.patch("/salaries/:payMasterId", requireFinancialRole, requirePermission("payroll:manage"), updateSalary);
-
 
 router.get("/analytics/salary-summary", requireManagerialRole, requirePermission("analytics:read"), getSalarySummary);
 
