@@ -190,11 +190,14 @@ const getEmployeeById = asyncHandler(async (req, res) => {
       pfAccountNo: true,
       isActive: true,
       joinedAt: true,
+      departmentId: true,
+      designationId: true,
       department: { select: { name: true } },
       designation: { select: { name: true } },
-      city: { select: { cityName: true } },
-      state: { select: { stateName: true } },
-      bankCode: { select: { code: true, name: true } },
+      cityName: true,
+      stateName: true,
+      countryName: true,
+      bankCode: true,
     },
   });
 

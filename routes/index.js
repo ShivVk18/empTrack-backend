@@ -12,6 +12,7 @@ import leaveApplicationRoutes from './leaveRoutes/leaveApplication.routes.js'
 import leavePolicyRoutes from './leaveRoutes/leavePolicy.routes.js'
 import attendanceRoutes from './attendanceRoutes/attendance.routes.js'
 import attendancePlanRoutes from './attendanceRoutes/attendancePlan.routes.js'
+import analyticsRoutes from './analyticsRoutes/analytics.routes.js'
 
 const router = express.Router()
 
@@ -28,6 +29,7 @@ router.use("/api/v1/leaveApplication",leaveApplicationRoutes)
 router.use("/api/v1/leavePolicy",leavePolicyRoutes)
 router.use("/api/v1/attendance",attendanceRoutes)
 router.use("/api/v1/attendancePlan",attendancePlanRoutes)
+router.use("/api/v1/analytics",analyticsRoutes)
 
 
 

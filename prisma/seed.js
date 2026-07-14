@@ -142,20 +142,69 @@ async function main() {
     )
   );
 
+  // --- Leave Policies ---
+  await prisma.leavePolicy.createMany({
+    data: [
+      {
+        companyId: company.id,
+        leaveType: "Casual Leave",
+        daysAllowed: 12,
+        carryForward: false,
+        isPaid: true,
+      },
+      {
+        companyId: company.id,
+        leaveType: "Sick Leave",
+        daysAllowed: 10,
+        carryForward: false,
+        isPaid: true,
+      },
+      {
+        companyId: company.id,
+        leaveType: "Earned Leave",
+        daysAllowed: 18,
+        carryForward: true,
+        maxCarryForwardDays: 6,
+        isPaid: true,
+      },
+    ],
+  });
+
   // --- Holidays ---
   await prisma.$transaction([
     prisma.holiday.create({
       data: {
         companyId: company.id,
-        date: new Date("2025-01-26"),
+        date: new Date("2026-01-26"),
         name: "Republic Day",
       },
     }),
     prisma.holiday.create({
       data: {
         companyId: company.id,
-        date: new Date("2025-08-15"),
+        date: new Date("2026-08-15"),
         name: "Independence Day",
+      },
+    }),
+    prisma.holiday.create({
+      data: {
+        companyId: company.id,
+        date: new Date("2026-10-02"),
+        name: "Gandhi Jayanti",
+      },
+    }),
+    prisma.holiday.create({
+      data: {
+        companyId: company.id,
+        date: new Date("2026-12-25"),
+        name: "Christmas Day",
+      },
+    }),
+    prisma.holiday.create({
+      data: {
+        companyId: company.id,
+        date: new Date("2026-01-01"),
+        name: "New Year's Day",
       },
     }),
   ]);

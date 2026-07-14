@@ -12,12 +12,16 @@ const errorHandler = (err, req, res, next) => {
 
   
   if (process.env.NODE_ENV === "development") {
-    console.error("Error:", {
-      message: error.message,
-      statusCode: error.statusCode,
-      stack: error.stack,
-      errors: error.errors,
-    })
+    if (error.statusCode >= 500) {
+      console.error("Error:", {
+        message: error.message,
+        statusCode: error.statusCode,
+        stack: error.stack,
+        errors: error.errors,
+      });
+    } else {
+      console.warn(`[Client Warning] ${error.statusCode} - ${error.message} (${req.method} ${req.originalUrl})`);
+    }
   }
 
  

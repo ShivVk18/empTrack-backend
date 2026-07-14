@@ -13,8 +13,6 @@ const getCompanyDetails = asyncHandler(async (req, res) => {
   const company = await prisma.company.findUnique({
     where: { id: companyId },
     include: {
-      state: { select: { stateName: true } },
-      city: { select: { cityName: true } },
       _count: {
         select: {
           employees: true,

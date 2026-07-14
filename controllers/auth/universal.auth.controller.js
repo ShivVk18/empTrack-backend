@@ -135,6 +135,68 @@ const adminSignUp = asyncHandler(async (req, res) => {
       },
     });
 
+    // Create default attendance plan
+    await tx.attendancePlan.create({
+      data: {
+        companyId: company.id,
+        name: "Default Plan",
+        description: "Standard 8-hour shift",
+        workingHours: 8,
+        allowedLateMins: 15,
+        shiftStartTime: "09:00",
+        isDefault: true,
+      },
+    });
+
+    // Create default leave policies
+    await tx.leavePolicy.createMany({
+      data: [
+        {
+          companyId: company.id,
+          leaveType: "Casual Leave",
+          daysAllowed: 12,
+          carryForward: false,
+          isPaid: true,
+        },
+        {
+          companyId: company.id,
+          leaveType: "Sick Leave",
+          daysAllowed: 10,
+          carryForward: false,
+          isPaid: true,
+        },
+        {
+          companyId: company.id,
+          leaveType: "Earned Leave",
+          daysAllowed: 18,
+          carryForward: true,
+          maxCarryForwardDays: 6,
+          isPaid: true,
+        },
+      ],
+    });
+
+    // Create default pay parameters
+    await Promise.all(
+      ["PERMANENT", "CONTRACT", "INTERN", "CONSULTANT", "PART_TIME"].map((type) =>
+        tx.payParameter.create({
+          data: {
+            companyId: company.id,
+            employeeType: type,
+            da: 10,
+            ta: 5,
+            hra: 20,
+            spall: 15,
+            medicalAllRate: 5,
+            epfRate: 12,
+            esiRate: 0.75,
+            tdsRate: 2,
+            professionalTaxRate: 1,
+          },
+        })
+      )
+    );
+
     return { company, admin };
   });
 

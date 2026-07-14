@@ -228,4 +228,30 @@ const getOwnAttendance = asyncHandler(async (req, res) => {
     );
 });
 
-export { clockIn, clockOut, getAllAttendance, getOwnAttendance };
+const getClockStatus = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  const today = dayjs().startOf("day").toDate();
+
+  const attendance = await prisma.attendance.findUnique({
+    where: {
+      employeeId_date: {
+        employeeId: userId,
+        date: today,
+      },
+    },
+  });
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        isClockedIn: !!attendance && !attendance.outTime,
+        attendance: attendance || null,
+      },
+      "Clock status fetched successfully"
+    )
+  );
+});
+
+export { clockIn, clockOut, getAllAttendance, getOwnAttendance, getClockStatus };
+

@@ -103,7 +103,6 @@ const ROLE_PERMISSIONS = {
 
 
   HR: [
-    "company:read",
     "employee:read",
     "employee:manage",
     "employee:update:basic",
@@ -205,8 +204,6 @@ const ROLE_PERMISSIONS = {
     "attendance:clockin",
     "attendance:clockout",
 
-    "payroll:read",
-    
     "leave:apply",
     "leave:view_own",
     "complain:raise",

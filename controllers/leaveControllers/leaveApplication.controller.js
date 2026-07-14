@@ -9,8 +9,8 @@ const applyLeave = asyncHandler(async (req, res) => {
   const companyId = req.user.companyId;
   const userRole = req.user.role;
 
-  if (["HR", "SR_MANAGER", "MANAGER", "ACCOUNTANT", "ADMIN"].includes(userRole)) {
-    throw new ApiError(403, "Only employees can apply for leave");
+  if (req.userType === "admin") {
+    throw new ApiError(403, "Administrators cannot apply for leave");
   }
 
   const { leavePolicyId, fromDate, toDate, reason, isHalfDay, session } = req.body;
